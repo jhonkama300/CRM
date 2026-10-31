@@ -1,21 +1,20 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { cn } from "@/lib/utils";
-import type { Contact, Deal, ContactNote, Tag } from "@/types";
+import type { AccountMember, Contact, Deal, ContactNote, Tag } from "@/types";
 import {
   Phone,
   Mail,
   Copy,
   Check,
-  User,
   Tag as TagIcon,
   DollarSign,
   StickyNote,
   Plus,
   Activity,
+  AtSign,
   ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -31,6 +30,13 @@ import { format } from "date-fns";
 import { useTranslations } from "next-intl";
 import { contactHandle } from "@/lib/whatsapp/wa-identity";
 import { ContactActivity } from "./contact-activity";
+import { fetchAccountMembers, memberLabel } from "@/lib/account/members";
+import {
+  extractMentionedUserIds,
+  insertMention,
+  mentionQueryAt,
+  type MentionQuery,
+} from "@/lib/inbox/mentions";
 
 interface ContactSidebarProps {
   contact: Contact | null;
@@ -41,7 +47,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const tThread = useTranslations("Inbox.messageThread");
   const tActivity = useTranslations("Inbox.activity");
 
-  const { accountId } = useAuth();
+  const { accountId, user } = useAuth();
   const [copied, setCopied] = useState(false);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [notes, setNotes] = useState<ContactNote[]>([]);
@@ -49,6 +55,9 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const [newNote, setNewNote] = useState("");
   const [addingNote, setAddingNote] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
+  const [members, setMembers] = useState<AccountMember[]>([]);
+  const [mention, setMention] = useState<MentionQuery | null>(null);
+  const noteRef = useRef<HTMLTextAreaElement>(null);
 
   const fetchContactData = useCallback(async () => {
     if (!contact) return;
@@ -93,6 +102,10 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
     fetchContactData();
   }, [fetchContactData]);
 
+  useEffect(() => {
+    void fetchAccountMembers().then(setMembers);
+  }, []);
+
   const handleCopyPhone = useCallback(async () => {
     // Copies whatever the row displays — a BSUID-only contact has no
     // phone number to copy, but its @username still identifies them.
@@ -124,6 +137,9 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
         account_id: accountId,
         user_id: user?.id,
         note_text: newNote.trim(),
+        mentioned_user_ids: extractMentionedUserIds(newNote, members).filter(
+          (id) => id !== user?.id,
+        ),
       })
       .select()
       .single();
@@ -131,9 +147,32 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
     if (!error && data) {
       setNotes((prev) => [data, ...prev]);
       setNewNote("");
+      setMention(null);
     }
     setAddingNote(false);
-  }, [contact, newNote, accountId]);
+  }, [contact, newNote, accountId, members]);
+
+  const mentionMatches = mention
+    ? members
+        .filter((member) => member.user_id !== user?.id)
+        .filter((member) =>
+          memberLabel(member)
+            .toLowerCase()
+            .includes(mention.query.toLowerCase()),
+        )
+        .slice(0, 6)
+    : [];
+
+  const chooseMention = (member: AccountMember) => {
+    if (!mention) return;
+    const next = insertMention(newNote, mention, member);
+    setNewNote(next.value);
+    setMention(null);
+    requestAnimationFrame(() => {
+      noteRef.current?.focus();
+      noteRef.current?.setSelectionRange(next.cursor, next.cursor);
+    });
+  };
 
   if (!contact) {
     return (
@@ -280,13 +319,52 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
             </div>
             <div className="mt-2">
               <div className="flex gap-2">
-                <textarea
-                  value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
-                  placeholder={tSidebar("addNotePlaceholder")}
-                  rows={2}
-                  className="flex-1 resize-none rounded-lg border border-border bg-muted px-3 py-2 text-xs text-foreground placeholder-muted-foreground outline-none focus:border-primary/50"
-                />
+                <div className="relative flex-1">
+                  <textarea
+                    ref={noteRef}
+                    value={newNote}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setNewNote(value);
+                      setMention(
+                        mentionQueryAt(value, e.target.selectionStart ?? value.length),
+                      );
+                    }}
+                    onSelect={(e) => {
+                      const el = e.currentTarget;
+                      setMention(
+                        mentionQueryAt(newNote, el.selectionStart ?? newNote.length),
+                      );
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") setMention(null);
+                    }}
+                    placeholder={tSidebar("addNotePlaceholder")}
+                    rows={2}
+                    className="w-full resize-none rounded-lg border border-border bg-muted px-3 py-2 text-xs text-foreground placeholder-muted-foreground outline-none focus:border-primary/50"
+                  />
+                  {mention && mentionMatches.length > 0 && (
+                    <div className="absolute bottom-full left-0 z-20 mb-1 w-full overflow-hidden rounded-lg border border-border bg-popover shadow-lg">
+                      {mentionMatches.map((member) => (
+                        <button
+                          key={member.user_id}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => chooseMention(member)}
+                          className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs text-popover-foreground hover:bg-muted"
+                        >
+                          <AtSign className="h-3 w-3 text-muted-foreground" />
+                          <span className="truncate">{memberLabel(member)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {mention && mentionMatches.length === 0 && (
+                    <div className="absolute bottom-full left-0 z-20 mb-1 w-full rounded-lg border border-border bg-popover px-2.5 py-1.5 text-xs text-muted-foreground shadow-lg">
+                      {tSidebar("noMentionMatches")}
+                    </div>
+                  )}
+                </div>
                 <Button
                   size="sm"
                   className="h-auto bg-primary px-2 hover:bg-primary/90"

@@ -308,6 +308,30 @@ BEGIN
       'redeem_invitation does not guard channel data - migration 073 did not apply';
   END IF;
 
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'contact_notes'
+      AND column_name = 'mentioned_user_ids'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'on_contact_note_mentions'
+  ) THEN
+    RAISE EXCEPTION
+      'contact note mentions are missing - migration 075 did not apply';
+  END IF;
+  IF pg_get_constraintdef(
+       (SELECT oid FROM pg_constraint
+        WHERE conname = 'notifications_type_check')
+     ) NOT LIKE '%mention%' THEN
+    RAISE EXCEPTION
+      'notifications_type_check does not allow mention - migration 075 did not apply';
+  END IF;
+  IF has_function_privilege(
+       'authenticated', 'public.notify_contact_note_mentions()', 'EXECUTE'
+     ) THEN
+    RAISE EXCEPTION
+      'authenticated can execute notify_contact_note_mentions - migration 075 grants are wrong';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

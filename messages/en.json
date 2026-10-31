@@ -638,7 +638,8 @@
       "deals": "Deals",
       "noTags": "No tags",
       "noDeals": "No deals",
-      "addNotePlaceholder": "Add a note..."
+      "addNotePlaceholder": "Add a note...",
+      "noMentionMatches": "No teammates match"
     },
     "activity": {
       "open": "View history",

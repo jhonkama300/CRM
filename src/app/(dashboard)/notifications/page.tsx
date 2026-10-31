@@ -6,7 +6,14 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { notificationsAccountFilter } from "@/lib/notifications/unread-count";
 import type { Notification } from "@/types";
-import { Bell, CheckCheck, Loader2, TriangleAlert, UserPlus } from "lucide-react";
+import {
+  AtSign,
+  Bell,
+  CheckCheck,
+  Loader2,
+  TriangleAlert,
+  UserPlus,
+} from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -18,6 +25,7 @@ import { useTranslations } from "next-intl";
 const TYPE_ICON: Record<Notification["type"], typeof Bell> = {
   conversation_assigned: UserPlus,
   channel_health: TriangleAlert,
+  mention: AtSign,
 };
 
 export default function NotificationsPage() {
@@ -128,6 +136,8 @@ export default function NotificationsPage() {
         router.push(`/inbox?c=${n.conversation_id}`);
       } else if (n.channel_id) {
         router.push("/settings?tab=channels");
+      } else if (n.contact_id) {
+        router.push(`/contacts?contact=${n.contact_id}`);
       }
     },
     [markRead, router],

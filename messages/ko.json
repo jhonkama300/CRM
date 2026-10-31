@@ -638,7 +638,8 @@
       "deals": "딜",
       "noTags": "태그 없음",
       "noDeals": "딜 없음",
-      "addNotePlaceholder": "메모 추가..."
+      "addNotePlaceholder": "메모 추가...",
+      "noMentionMatches": "일치하는 팀원이 없습니다"
     },
     "activity": {
       "open": "활동 기록 보기",

@@ -638,7 +638,8 @@
       "deals": "Negócios",
       "noTags": "Sem tags",
       "noDeals": "Sem negócios",
-      "addNotePlaceholder": "Adicionar uma nota..."
+      "addNotePlaceholder": "Adicionar uma nota...",
+      "noMentionMatches": "Nenhum colega corresponde"
     },
     "activity": {
       "open": "Ver histórico",

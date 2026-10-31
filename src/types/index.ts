@@ -190,6 +190,7 @@ export interface ContactNote {
   contact_id: string;
   user_id: string;
   note_text: string;
+  mentioned_user_ids?: string[];
   created_at: string;
 }
 
@@ -248,7 +249,10 @@ export interface Conversation {
 // Notifications (migration 027)
 // ============================================================
 
-export type NotificationType = 'conversation_assigned' | 'channel_health';
+export type NotificationType =
+  | 'conversation_assigned'
+  | 'channel_health'
+  | 'mention';
 
 export interface Notification {
   id: string;
