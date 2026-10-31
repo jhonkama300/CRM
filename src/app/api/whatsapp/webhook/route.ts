@@ -1,7 +1,7 @@
 import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption'
-import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
+import { getMediaUrl } from '@/lib/whatsapp/meta-api'
 import { mirrorInboundMedia } from '@/lib/whatsapp/mirror-inbound-media'
 import { normalizePhone } from '@/lib/whatsapp/phone-utils'
 import {
@@ -22,6 +22,7 @@ import { readCappedBody } from '@/lib/whatsapp/webhook-body'
 import { resumeAwaitingReply, runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
+import { transcribeInboundAudio } from '@/lib/ai/transcribe'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
   applyBroadcastRecipientStatus,
@@ -346,42 +347,63 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
 
       const phoneNumberId = value.metadata.phone_number_id
 
-      // Find user's config by phone_number_id. `.single()` returns
-      // PGRST116 for both 0 rows AND ≥2 rows — distinguish them so
-      // operators see the real cause in logs. ≥2 rows shouldn't happen
-      // post-migration 013 (UNIQUE constraint), but a row created
-      // before the constraint, or a race, would still surface here.
-      const { data: configRows, error: configError } = await supabaseAdmin()
-        .from('whatsapp_config')
-        .select('*')
+      // Resolve the channel first; fall back to the legacy single
+      // whatsapp_config row for deployments mid-migration.
+      const { data: channelRows, error: channelError } = await supabaseAdmin()
+        .from('channels')
+        .select('id, account_id, user_id, access_token, mirror_inbound_media')
         .eq('phone_number_id', phoneNumberId)
 
-      if (configError) {
+      let config: {
+        account_id: string
+        user_id: string
+        access_token: string
+        mirror_inbound_media?: boolean
+      } | null = null
+      let resolvedChannelId: string | null = null
+
+      if (channelError) {
+        console.error('Error fetching channel for phone_number_id:', phoneNumberId, channelError)
+      }
+      if (channelRows && channelRows.length === 1) {
+        config = channelRows[0]
+        resolvedChannelId = channelRows[0].id
+      } else if (channelRows && channelRows.length > 1) {
         console.error(
-          'Error fetching whatsapp_config for phone_number_id:',
+          `Multiple channels (${channelRows.length}) found for phone_number_id:`,
           phoneNumberId,
-          configError
+          '- inbound message dropped.'
         )
         continue
+      } else {
+        const { data: configRows, error: configError } = await supabaseAdmin()
+          .from('whatsapp_config')
+          .select('*')
+          .eq('phone_number_id', phoneNumberId)
+
+        if (configError) {
+          console.error('Error fetching whatsapp_config for phone_number_id:', phoneNumberId, configError)
+          continue
+        }
+        if (!configRows || configRows.length === 0) {
+          console.error('No config found for phone_number_id:', phoneNumberId)
+          continue
+        }
+        if (configRows.length > 1) {
+          console.error(
+            `Multiple configs (${configRows.length}) found for phone_number_id:`,
+            phoneNumberId,
+            '- inbound message dropped.'
+          )
+          continue
+        }
+        config = configRows[0]
       }
 
-      if (!configRows || configRows.length === 0) {
-        console.error('No config found for phone_number_id:', phoneNumberId)
+      if (!config) {
+        console.error('No channel or config resolved for phone_number_id:', phoneNumberId)
         continue
       }
-
-      if (configRows.length > 1) {
-        console.error(
-          `Multiple configs (${configRows.length}) found for phone_number_id:`,
-          phoneNumberId,
-          '— inbound message dropped. Resolve duplicates so each number maps to a single account.',
-          'Account owners:',
-          configRows.map((r: { account_id: string; user_id: string }) => `${r.account_id} (admin ${r.user_id})`)
-        )
-        continue
-      }
-
-      const config = configRows[0]
 
       const decryptedAccessToken = decrypt(config.access_token)
 
@@ -395,6 +417,8 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
           // Tenancy — drives every contact / conversation lookup
           // and the engines' active-row dispatch.
           config.account_id,
+          // Channel that received this message (multi-number support).
+          resolvedChannelId,
           // Audit / sender-of-record — used as the user_id on row
           // inserts that need it for NOT NULL FK compliance. Always
           // the admin who saved the WhatsApp config.
@@ -583,6 +607,8 @@ async function processMessage(
   // contact / conversation / message row created downstream is
   // stamped with this so any member of the account can see it.
   accountId: string,
+  // Channel that received this message (multi-number support).
+  channelId: string | null,
   // Sender-of-record for inserts that need a NOT NULL user_id FK
   // (contacts, conversations). Always the admin who saved the
   // WhatsApp config; the choice is arbitrary post-017 but stable.
@@ -619,7 +645,8 @@ async function processMessage(
   const convResult = await findOrCreateConversation(
     accountId,
     configOwnerUserId,
-    contactRecord.id
+    contactRecord.id,
+    channelId
   )
   if (!convResult) return
   const conversation = convResult.conversation
@@ -644,12 +671,28 @@ async function processMessage(
   }
 
   // Parse message content based on type
-  const { contentText, mediaUrl, mediaType, interactiveReplyId } =
-    await parseMessageContent(
-      message,
+  const parsedContent = await parseMessageContent(
+    message,
+    accessToken,
+    mirrorMedia ? { accountId } : null
+  )
+  const { mediaUrl, mediaType, interactiveReplyId } = parsedContent
+  let contentText = parsedContent.contentText
+
+  // Voice notes: transcribe before the row is inserted so the transcript
+  // becomes the message text for the inbox preview, Flows/automations,
+  // AI context, and the public message.received webhook. Best-effort —
+  // null simply leaves the audio untranscribed.
+  if (message.type === 'audio' && message.audio?.id) {
+    const transcript = await transcribeInboundAudio({
+      accountId,
+      mediaId: message.audio.id,
       accessToken,
-      mirrorMedia ? { accountId } : null
-    )
+      mediaUrl,
+      mimeType: mediaType,
+    })
+    if (transcript) contentText = transcript
+  }
 
   // Resolve swipe-reply context if present. A missing parent is fine —
   // we just store NULL and the UI renders the message without a quote.
@@ -714,6 +757,15 @@ async function processMessage(
         // extension from the fetched blob — impossible to do until the
         // bytes had already been fetched successfully.
         media_type: mediaType,
+        // Keep Meta's own media id so a failed download/transcription can
+        // be retried from the inbox without the original webhook payload.
+        meta_media_id:
+          message.audio?.id ??
+          message.image?.id ??
+          message.video?.id ??
+          message.document?.id ??
+          message.sticker?.id ??
+          null,
         message_id: message.id,
         status: 'delivered',
         created_at: receivedAt,
@@ -1321,6 +1373,7 @@ async function findOrCreateConversation(
   accountId: string,
   configOwnerUserId: string,
   contactId: string,
+  channelId: string | null,
 ) {
   // Look for an existing conversation in this account, oldest-first.
   //
@@ -1335,11 +1388,17 @@ async function findOrCreateConversation(
   // Ordering oldest-first and taking one row makes the lookup resolve to
   // the same canonical survivor the dedup migration (036) keeps, so any
   // pre-existing duplicates converge instead of compounding.
-  const { data: existingRows, error: findError } = await supabaseAdmin()
+  let conversationQuery = supabaseAdmin()
     .from('conversations')
     .select('*')
     .eq('account_id', accountId)
     .eq('contact_id', contactId)
+
+  if (channelId) {
+    conversationQuery = conversationQuery.eq('channel_id', channelId)
+  }
+
+  const { data: existingRows, error: findError } = await conversationQuery
     .order('created_at', { ascending: true })
     .limit(1)
 
@@ -1360,6 +1419,7 @@ async function findOrCreateConversation(
       account_id: accountId,
       user_id: configOwnerUserId,
       contact_id: contactId,
+      channel_id: channelId,
     })
     .select()
     .single()
@@ -1370,11 +1430,13 @@ async function findOrCreateConversation(
     // (migration 036) rejected the duplicate. Re-resolve the winning
     // row instead of dropping the message — mirrors findOrCreateContact.
     if (isUniqueViolation(createError)) {
-      const { data: raced } = await supabaseAdmin()
+      let racedQuery = supabaseAdmin()
         .from('conversations')
         .select('*')
         .eq('account_id', accountId)
         .eq('contact_id', contactId)
+      if (channelId) racedQuery = racedQuery.eq('channel_id', channelId)
+      const { data: raced } = await racedQuery
         .order('created_at', { ascending: true })
         .limit(1)
       if (raced && raced.length > 0) {

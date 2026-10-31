@@ -160,7 +160,86 @@ BEGIN
     RAISE EXCEPTION 'closed_at triggers are missing — migration 059 did not apply';
   END IF;
   IF has_function_privilege('anon', 'public.dashboard_overview(integer,text)', 'EXECUTE') THEN
-    RAISE EXCEPTION 'anon can execute dashboard_overview — migration 059 grants are wrong';
+    RAISE EXCEPTION 'anon can execute dashboard_overview - migration 059 grants are wrong';
+  END IF;
+
+  -- 060 adds the inbox banner's reason fields. A typo'd column here
+  -- would apply cleanly and leave the banner silently unable to explain
+  -- a pause at runtime.
+  IF (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'conversations'
+      AND column_name IN ('ai_pause_reason', 'ai_paused_at')
+  ) <> 2 THEN
+    RAISE EXCEPTION
+      'conversations.ai_pause_reason/ai_paused_at are missing - migration 060 did not apply';
+  END IF;
+
+  -- 061 adds inbox pin/snooze/follow-up + media retry identity.
+  IF (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'conversations'
+      AND column_name IN ('is_pinned', 'snoozed_until', 'follow_up_at')
+  ) <> 3 THEN
+    RAISE EXCEPTION
+      'conversations.is_pinned/snoozed_until/follow_up_at are missing - migration 061 did not apply';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'messages'
+      AND column_name = 'meta_media_id'
+  ) THEN
+    RAISE EXCEPTION 'messages.meta_media_id is missing - migration 061 did not apply';
+  END IF;
+
+  IF to_regclass('public.departments') IS NULL
+     OR to_regclass('public.department_members') IS NULL THEN
+    RAISE EXCEPTION 'departments/department_members are missing - migration 062 did not apply';
+  END IF;
+
+  IF (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'departments'
+      AND column_name IN ('position_x', 'position_y')
+  ) <> 2 THEN
+    RAISE EXCEPTION
+      'departments.position_x/position_y are missing - migration 063 did not apply';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'account_invitations'
+      AND column_name = 'department_id'
+  ) THEN
+    RAISE EXCEPTION 'account_invitations.department_id is missing - migration 064 did not apply';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'account_invitations_apply_department'
+  ) THEN
+    RAISE EXCEPTION 'account_invitations_apply_department trigger is missing - migration 064 did not apply';
+  END IF;
+
+  IF to_regclass('public.channels') IS NULL THEN
+    RAISE EXCEPTION 'public.channels is missing - migration 065 did not apply';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'conversations'
+      AND column_name = 'channel_id'
+  ) THEN
+    RAISE EXCEPTION 'conversations.channel_id is missing - migration 065 did not apply';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'conversations'
+      AND column_name = 'department_id'
+  ) THEN
+    RAISE EXCEPTION 'conversations.department_id is missing - migration 066 did not apply';
+  END IF;
+
+  IF to_regprocedure('public.can_access_channel(uuid)') IS NULL THEN
+    RAISE EXCEPTION 'public.can_access_channel(uuid) is missing - migration 067 did not apply';
   END IF;
 
   RAISE NOTICE 'schema verification passed';

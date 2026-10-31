@@ -109,6 +109,44 @@ export default function ContactsPage() {
   // earlier request resolve last and render stale rows.
   const fetchSeq = useRef(0);
 
+  // Deep links from the command palette: `?new=1` opens the create form,
+  // `?contact=<id>` opens a contact's detail sheet. Read them once on
+  // mount and then strip the params so a refresh doesn't reopen a modal.
+  useEffect(() => {
+    // Deferred one tick so the effect body itself doesn't call setState
+    // (react-hooks/set-state-in-effect); this is still a mount-only
+    // deep-link handler.
+    const id = window.setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      let changed = false;
+
+      if (params.get('new') === '1') {
+        setEditContact(null);
+        setFormOpen(true);
+        params.delete('new');
+        changed = true;
+      }
+
+      const contactId = params.get('contact');
+      if (contactId) {
+        setDetailContactId(contactId);
+        setDetailOpen(true);
+        params.delete('contact');
+        changed = true;
+      }
+
+      if (changed) {
+        const qs = params.toString();
+        window.history.replaceState(
+          null,
+          '',
+          window.location.pathname + (qs ? `?${qs}` : ''),
+        );
+      }
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, []);
+
   const fetchTags = useCallback(async () => {
     const { data } = await supabase.from('tags').select('*');
     if (data) {

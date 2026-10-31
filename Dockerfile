@@ -1,12 +1,13 @@
 # syntax=docker/dockerfile:1
 
 # ---------------------------------------------------------------
-# Stage 1 — install dependencies (cached until package*.json change)
+# Stage 1 — install dependencies (cached until package.json/pnpm-lock.yaml change)
 # ---------------------------------------------------------------
 FROM node:22-alpine AS deps
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
 # ---------------------------------------------------------------
 # Stage 2 — build
@@ -32,7 +33,7 @@ ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
     NEXT_PUBLIC_APP_LOCALE=$NEXT_PUBLIC_APP_LOCALE \
     NEXT_TELEMETRY_DISABLED=1
 
-RUN npm run build
+RUN pnpm run build
 
 # ---------------------------------------------------------------
 # Stage 3 — minimal runtime (standalone output)

@@ -7,6 +7,7 @@ import {
   ImageOff,
   Loader2,
   Maximize2,
+  RefreshCw,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -37,14 +38,26 @@ const MEDIA_BOX = "max-h-64 max-w-60";
 export function MediaUnavailable({
   label,
   t,
+  onRetry,
 }: {
   label: string;
   t: Translator;
+  onRetry?: () => void;
 }) {
   return (
     <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
       <ImageOff className="h-4 w-4 shrink-0 text-muted-foreground" />
-      <span>{t("unavailable", { label })}</span>
+      <span className="min-w-0 flex-1">{t("unavailable", { label })}</span>
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="inline-flex shrink-0 items-center gap-1 font-medium text-primary hover:underline"
+        >
+          <RefreshCw className="h-3 w-3" />
+          {t("retry")}
+        </button>
+      )}
     </div>
   );
 }
@@ -234,14 +247,22 @@ export function MediaAudioBubble({
   const { downloading, download } = useMediaDownload(message, t);
 
   return (
-    <div className="flex items-center gap-2">
-      <audio src={message.media_url} controls className="max-w-60" />
-      <MediaActionButton
-        icon={Download}
-        label={t("download")}
-        onClick={download}
-        busy={downloading}
-      />
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-2">
+        <audio src={message.media_url} controls className="max-w-60" />
+        <MediaActionButton
+          icon={Download}
+          label={t("download")}
+          onClick={download}
+          busy={downloading}
+        />
+      </div>
+      {message.content_text && (
+        <p className="max-w-60 whitespace-pre-wrap break-words text-xs text-muted-foreground">
+          <span className="font-medium">{t("transcription")}: </span>
+          {message.content_text}
+        </p>
+      )}
     </div>
   );
 }

@@ -100,11 +100,14 @@ the server layers three guards:
 
 ## Development
 
+Requires pnpm 12 (`corepack enable pnpm` if you don't already have it
+installed).
+
 ```bash
-npm install
-npm run build      # compile to dist/
-npm run typecheck
-npm start          # run the compiled server (needs the env vars)
+pnpm install
+pnpm run build      # compile to dist/
+pnpm run typecheck
+pnpm start          # run the compiled server (needs the env vars)
 ```
 
 Logs go to **stderr** — stdout is reserved for the MCP protocol.

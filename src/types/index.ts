@@ -68,6 +68,30 @@ export interface Account {
  * when the caller has admin+ — agents and viewers see name +
  * avatar + role only.
  */
+export type DepartmentRole = 'manager' | 'supervisor' | 'agent' | 'viewer';
+
+export interface Department {
+  id: string;
+  account_id: string;
+  parent_id: string | null;
+  name: string;
+  color: string;
+  position: number;
+  position_x: number;
+  position_y: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DepartmentMember {
+  id: string;
+  account_id: string;
+  department_id: string;
+  user_id: string;
+  role: DepartmentRole;
+  created_at: string;
+}
+
 export interface AccountMember {
   user_id: string;
   full_name: string;
@@ -94,6 +118,9 @@ export interface AccountInvitation {
   expires_at: string;
   accepted_at: string | null;
   accepted_by_user_id: string | null;
+  /** Optional department assignment applied when the invite is redeemed. */
+  department_id?: string | null;
+  department_role?: DepartmentRole | null;
 }
 
 export interface Contact {
@@ -168,12 +195,20 @@ export interface ContactNote {
 
 export type ConversationStatus = 'open' | 'pending' | 'closed';
 
+/** Why the AI auto-reply bot is paused on a conversation. */
+export type AiPauseReason =
+  | 'handoff'
+  | 'empty_response'
+  | 'quota'
+  | 'provider_error'
+  | 'manual';
+
 export interface Conversation {
   id: string;
   user_id: string;
   contact_id: string;
   status: ConversationStatus;
-  assigned_agent_id?: string;
+  assigned_agent_id?: string | null;
   last_message_text?: string;
   last_message_at?: string;
   unread_count: number;
@@ -183,6 +218,10 @@ export interface Conversation {
   created_at: string;
   updated_at: string;
   contact?: Contact;
+  channel_id?: string | null;
+  channel?: Pick<Channel, "id" | "name" | "color"> | null;
+  department_id?: string | null;
+  department?: Pick<Department, "id" | "name" | "color"> | null;
   /**
    * AI auto-reply state for this thread (migration 029 + 033):
    *  - `ai_autoreply_disabled` — the bot is paused here (a human took
@@ -191,10 +230,18 @@ export interface Conversation {
    *    checked against the account's per-conversation cap.
    *  - `ai_handoff_summary` — short internal note the bot wrote when it
    *    handed off, shown to whoever takes the thread over.
+   *  - `ai_pause_reason` / `ai_paused_at` — why and when the bot stopped
+   *    (migration 060), surfaced in the inbox banner.
    */
   ai_autoreply_disabled?: boolean;
   ai_reply_count?: number;
   ai_handoff_summary?: string | null;
+  ai_pause_reason?: AiPauseReason | null;
+  ai_paused_at?: string | null;
+  /** Inbox controls added in migration 061. */
+  is_pinned?: boolean;
+  snoozed_until?: string | null;
+  follow_up_at?: string | null;
 }
 
 // ============================================================
@@ -280,6 +327,9 @@ export interface Message {
   error_code?: number | null;
   error_title?: string | null;
   error_details?: string | null;
+  /** Meta's media id for inbound attachments (migration 061). Lets a
+   *  failed download/transcription be retried without the webhook payload. */
+  meta_media_id?: string | null;
 }
 
 export type ReactionActor = 'customer' | 'agent';
@@ -292,6 +342,24 @@ export interface MessageReaction {
   actor_id?: string;
   emoji: string;
   created_at: string;
+}
+
+export interface Channel {
+  id: string;
+  account_id: string;
+  department_id: string | null;
+  user_id: string;
+  source_config_id: string | null;
+  name: string;
+  color: string;
+  phone_number_id: string;
+  waba_id: string | null;
+  access_token: string;
+  verify_token: string | null;
+  status: 'connected' | 'disconnected';
+  mirror_inbound_media: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface WhatsAppConfig {

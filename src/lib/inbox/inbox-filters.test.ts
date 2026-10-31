@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import type { Conversation } from "@/types";
 import {
   applyInboxFilter,
+  attentionLevel,
   isAwaitingReply,
   isWindowClosing,
+  minutesWaiting,
   parseInboxFilter,
 } from "./inbox-filters";
 
@@ -61,6 +63,29 @@ describe("isWindowClosing", () => {
     expect(
       isWindowClosing(conv("a", { last_inbound_at: ago(23 * 60), last_reply_at: ago(60) }), NOW),
     ).toBe(false);
+  });
+});
+
+describe("attentionLevel", () => {
+  it("goes green, amber, red as a waiting chat ages", () => {
+    expect(attentionLevel(conv("a", { last_inbound_at: ago(5) }), NOW)).toBe("ok");
+    expect(attentionLevel(conv("b", { last_inbound_at: ago(20) }), NOW)).toBe("warning");
+    expect(attentionLevel(conv("c", { last_inbound_at: ago(61) }), NOW)).toBe("critical");
+  });
+
+  it("is none once answered or closed", () => {
+    expect(
+      attentionLevel(
+        conv("a", { last_inbound_at: ago(60), last_reply_at: ago(5) }),
+        NOW,
+      ),
+    ).toBe("none");
+    expect(attentionLevel(conv("b"), NOW)).toBe("none");
+  });
+
+  it("reports whole minutes waiting", () => {
+    expect(minutesWaiting(conv("a", { last_inbound_at: ago(17) }), NOW)).toBe(17);
+    expect(minutesWaiting(conv("b"), NOW)).toBe(0);
   });
 });
 

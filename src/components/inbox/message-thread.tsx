@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
+import { Fragment, useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { usePresence } from "@/hooks/use-presence";
@@ -21,14 +22,26 @@ import {
   MessageSquare,
   ChevronDown,
   UserPlus,
+  Users,
   Check,
   Clock,
+  Ellipsis,
   ArrowLeft,
+  ArrowDown,
   RefreshCw,
   PanelRightOpen,
   PanelRightClose,
+  Activity,
+  DollarSign,
+  Archive,
 } from "lucide-react";
-import { format, isToday, isYesterday, differenceInHours } from "date-fns";
+import {
+  format,
+  isToday,
+  isYesterday,
+  differenceInHours,
+  formatDistanceToNow,
+} from "date-fns";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -51,6 +64,14 @@ import {
 import { deleteAccountMedia } from "@/lib/storage/upload-media";
 import { TemplatePicker } from "./template-picker";
 import { AiThreadBanner } from "./ai-thread-banner";
+import { ContactActivity } from "./contact-activity";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { buildReplyPreview } from "./reply-quote";
 import {
   renderTemplateBody,
@@ -90,6 +111,7 @@ interface MessageThreadProps {
   onOlderMessagesLoaded?: (messages: Message[]) => void;
   onNewMessage: (message: Message) => void;
   onUpdateMessage: (id: string, updates: Partial<Message>) => void;
+  onRemoveMessage?: (id: string) => void;
   onStatusChange: (conversationId: string, status: ConversationStatus) => void;
   onAssignChange: (
     conversationId: string,
@@ -179,6 +201,7 @@ export function MessageThread({
   onOlderMessagesLoaded,
   onNewMessage,
   onUpdateMessage,
+  onRemoveMessage,
   onStatusChange,
   onAssignChange,
   onBack,
@@ -190,18 +213,29 @@ export function MessageThread({
   const t = useTranslations("Inbox.messageThread");
   const tTimer = useTranslations("Inbox.sessionTimer");
   const tQuote = useTranslations("Inbox.replyQuote");
+  const tActivity = useTranslations("Inbox.activity");
 
   const { user } = useAuth();
+  const router = useRouter();
   const { getPresence, getRow, now } = usePresence();
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
+  const [unreadAnchorId, setUnreadAnchorId] = useState<string | null>(null);
+  const unreadAnchorElRef = useRef<HTMLDivElement | null>(null);
+  const pendingUnreadRef = useRef(0);
+  const didJumpUnreadRef = useRef(false);
+  const latestConversationRef = useRef(conversation);
+  const [otherTyping, setOtherTyping] = useState<string | null>(null);
+  const typingChannelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
+  const lastTypingSentRef = useRef(0);
   const [olderPages, setOlderPages] = useState<{
     conversationId: string;
     hasOlder: boolean;
   } | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [profilesVersion, setProfilesVersion] = useState(0);
   const [reactions, setReactions] = useState<MessageReaction[]>([]);
@@ -347,6 +381,18 @@ export function MessageThread({
     [conversationId],
   );
 
+  // Capture the unread count at open time. The reset effect below will
+  // zero the server value almost immediately; the marker needs the count
+  // from before that write.
+  useEffect(() => {
+    latestConversationRef.current = conversation;
+  });
+  useEffect(() => {
+    pendingUnreadRef.current = latestConversationRef.current?.unread_count ?? 0;
+    didJumpUnreadRef.current = false;
+    setUnreadAnchorId(null);
+  }, [conversationId]);
+
   // Fetch messages whenever the selected conversation changes. Kept
   // separate from the unread-reset effect so that incoming messages
   // arriving while the thread is open don't trigger a full refetch —
@@ -378,6 +424,20 @@ export function MessageThread({
           conversationId,
           hasOlder: newestPage.length === MESSAGE_PAGE_SIZE,
         });
+
+        const unreadCount = pendingUnreadRef.current;
+        if (unreadCount > 0) {
+          const customerMessages = newestPage.filter(
+            (m) => m.sender_type === "customer",
+          );
+          const anchor =
+            customerMessages[
+              Math.max(0, customerMessages.length - unreadCount)
+            ];
+          setUnreadAnchorId(anchor?.id ?? null);
+          pendingUnreadRef.current = 0;
+        }
+
         onMessagesLoadedRef.current(newestPage, conversationId);
       }
 
@@ -533,6 +593,56 @@ export function MessageThread({
     };
   }, [conversationId]);
 
+  // Ephemeral typing presence for this thread. Broadcast-only, so no DB
+  // table or write amplification on every keystroke.
+  useEffect(() => {
+    if (!conversationId || !user?.id) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`typing:${conversationId}`)
+      .on(
+        "broadcast",
+        { event: "typing" },
+        (payload: {
+          payload?: { user_id?: string; name?: string };
+        }) => {
+          const data = payload.payload;
+          if (!data?.user_id || data.user_id === user.id) return;
+          setOtherTyping(data.name || t("anotherAgent"));
+          window.setTimeout(() => setOtherTyping(null), 4000);
+        },
+      )
+      .subscribe();
+    typingChannelRef.current = channel;
+    return () => {
+      typingChannelRef.current = null;
+      setOtherTyping(null);
+      supabase.removeChannel(channel);
+    };
+  }, [conversationId, user?.id, t]);
+
+  const handleTyping = useCallback(() => {
+    if (!user?.id) return;
+    const now = Date.now();
+    if (now - lastTypingSentRef.current < 1500) return;
+    lastTypingSentRef.current = now;
+    const channel = typingChannelRef.current;
+    if (!channel) return;
+    void channel
+      .send({
+        type: "broadcast",
+        event: "typing",
+        payload: {
+          user_id: user.id,
+          name:
+            (user.user_metadata?.full_name as string | undefined) ||
+            user.email ||
+            t("anotherAgent"),
+        },
+      })
+      .catch(() => {});
+  }, [user, t]);
+
   // Clear any in-progress reply draft when the active conversation changes —
   // a quote pulled from conversation A shouldn't bleed into conversation B.
   useEffect(() => {
@@ -560,7 +670,8 @@ export function MessageThread({
       });
   }, [conversationId, hasUnread]);
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll to bottom on new messages. When the thread opened with
+  // unread messages, jump to the unread divider once instead.
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -570,8 +681,20 @@ export function MessageThread({
       el.scrollTop = el.scrollHeight - anchor.scrollHeight + anchor.scrollTop;
       return;
     }
+    if (!didJumpUnreadRef.current && unreadAnchorElRef.current) {
+      unreadAnchorElRef.current.scrollIntoView({ block: "center" });
+      didJumpUnreadRef.current = true;
+      return;
+    }
     el.scrollTop = el.scrollHeight;
-  }, [messages]);
+  }, [messages, unreadAnchorId]);
+
+  const jumpToUnread = useCallback(() => {
+    unreadAnchorElRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  }, []);
 
   const handleSend = useCallback(
     async (text: string, replyToId?: string) => {
@@ -839,6 +962,53 @@ export function MessageThread({
     [conversation, onNewMessage, onUpdateMessage, t],
   );
 
+  const handleRetryMessage = useCallback(
+    (message: Message) => {
+      if (message.status !== "failed" || message.sender_type !== "agent") return;
+      if (message.content_type === "text" && message.content_text) {
+        onRemoveMessage?.(message.id);
+        void handleSend(message.content_text, message.reply_to_message_id);
+        return;
+      }
+      if (
+        ["image", "video", "document", "audio"].includes(message.content_type) &&
+        message.media_url
+      ) {
+        onRemoveMessage?.(message.id);
+        void handleSendMedia({
+          kind: message.content_type as "image" | "video" | "document" | "audio",
+          mediaUrl: message.media_url,
+          // The failed optimistic row never persisted its storage path;
+          // the existing public URL is enough for Meta to fetch it.
+          path: "",
+          caption: message.content_text ?? "",
+        });
+      }
+    },
+    [handleSend, handleSendMedia, onRemoveMessage],
+  );
+
+  const handleRetryMedia = useCallback(
+    async (message: Message) => {
+      try {
+        const res = await fetch(
+          `/api/inbox/messages/${message.id}/reprocess-media`,
+          { method: "POST" },
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          toast.error(data?.error ?? t("retryMediaFailed"));
+          return;
+        }
+        onUpdateMessage(message.id, data.message ?? {});
+        toast.success(t("mediaRetried"));
+      } catch {
+        toast.error(t("networkError"));
+      }
+    },
+    [onUpdateMessage, t],
+  );
+
   // Build a quick id → Message map so reply quotes can be rendered without
   // an extra fetch — the thread already holds the full conversation.
   const messagesById = useMemo(() => {
@@ -995,6 +1165,24 @@ export function MessageThread({
     (s) => s.value === conversation.status
   );
   const assignedAgentId = conversation.assigned_agent_id ?? null;
+  const recentAgentReply = (() => {
+    const cutoff = now - 5 * 60_000;
+    const last = [...messages]
+      .reverse()
+      .find(
+        (m) =>
+          (m.sender_type === "agent" || m.sender_type === "bot") &&
+          !!m.sender_id &&
+          m.sender_id !== user?.id &&
+          new Date(m.created_at).getTime() >= cutoff,
+      );
+    if (!last) return null;
+    const author = profiles.find((p) => p.user_id === last.sender_id);
+    return {
+      name: author?.full_name || t("anotherAgent"),
+      at: last.created_at,
+    };
+  })();
   const currentAssignee = profiles.find((p) => p.user_id === assignedAgentId);
   const assignLabel = assignedAgentId
     ? (currentAssignee?.full_name ?? t("assigned"))
@@ -1074,6 +1262,18 @@ export function MessageThread({
               ) : (
                 <PanelRightOpen className="h-4 w-4" />
               )}
+            </button>
+          )}
+
+          {unreadAnchorId && (
+            <button
+              type="button"
+              onClick={jumpToUnread}
+              aria-label={t("jumpToUnread")}
+              title={t("jumpToUnread")}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-primary transition-colors hover:bg-muted"
+            >
+              <ArrowDown className="h-3.5 w-3.5" />
             </button>
           )}
 
@@ -1188,8 +1388,76 @@ export function MessageThread({
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Chat info menu — the same actions as the "About chat" panel
+              in WhatsApp-style inboxes. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label={t("aboutChat")}
+              title={t("aboutChat")}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <Ellipsis className="h-4 w-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="w-56 border-border bg-popover"
+            >
+              <DropdownMenuItem
+                onClick={() => handleAssignChange(user?.id ?? null)}
+                disabled={!user?.id}
+                className="text-sm text-popover-foreground"
+              >
+                <UserPlus className="mr-2 h-3.5 w-3.5" />
+                {t("assignConversation")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => router.push(`/contacts?contact=${contact.id}`)}
+                className="text-sm text-popover-foreground"
+              >
+                <UserPlus className="mr-2 h-3.5 w-3.5" />
+                {t("openContact")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => router.push("/pipelines")}
+                className="text-sm text-popover-foreground"
+              >
+                <DollarSign className="mr-2 h-3.5 w-3.5" />
+                {t("openDeal")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setHistoryOpen(true)}
+                className="text-sm text-popover-foreground"
+              >
+                <Activity className="mr-2 h-3.5 w-3.5" />
+                {t("chatHistory")}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-border" />
+              <DropdownMenuItem
+                onClick={() => handleStatusChange("closed")}
+                className="text-sm text-destructive"
+              >
+                <Archive className="mr-2 h-3.5 w-3.5" />
+                {t("closeConversation")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
+
+      {(otherTyping || recentAgentReply) && (
+        <div className="flex items-center gap-2 border-b border-amber-500/20 bg-amber-500/5 px-4 py-1.5 text-[11px] text-amber-600 dark:text-amber-300">
+          <Users className="h-3 w-3" />
+          {otherTyping
+            ? t("agentTyping", { name: otherTyping })
+            : t("agentReplied", {
+                name: recentAgentReply!.name,
+                time: formatDistanceToNow(new Date(recentAgentReply!.at), {
+                  addSuffix: true,
+                }),
+              })}
+        </div>
+      )}
 
       {/* Messages Area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
@@ -1249,27 +1517,54 @@ export function MessageThread({
                       void postReaction(msg.id, next);
                     };
                     return (
-                      <MessageActions
-                        key={msg.id}
-                        message={msg}
-                        onReply={() => handleStartReply(msg)}
-                        onReact={(emoji) => {
-                          if (emoji) void postReaction(msg.id, emoji);
-                        }}
-                      >
-                        <MessageBubble
+                      <Fragment key={msg.id}>
+                        {msg.id === unreadAnchorId && (
+                          <div
+                            ref={unreadAnchorElRef}
+                            className="my-3 flex items-center gap-3 text-[10px] font-medium uppercase tracking-wider text-primary"
+                          >
+                            <span className="h-px flex-1 bg-primary/30" />
+                            {t("newMessages")}
+                            <span className="h-px flex-1 bg-primary/30" />
+                          </div>
+                        )}
+                        <MessageActions
                           message={msg}
-                          template={
-                            msg.content_type === "template"
-                              ? matchMessageTemplate(msg, sentTemplates)
-                              : null
-                          }
-                          reply={reply}
-                          reactions={msgReactions}
-                          onToggleReaction={handlePillToggle}
-                          onOpenMedia={handleMediaChange}
-                        />
-                      </MessageActions>
+                          onReply={() => handleStartReply(msg)}
+                          onReact={(emoji) => {
+                            if (emoji) void postReaction(msg.id, emoji);
+                          }}
+                        >
+                          <MessageBubble
+                            message={msg}
+                            template={
+                              msg.content_type === "template"
+                                ? matchMessageTemplate(msg, sentTemplates)
+                                : null
+                            }
+                            reply={reply}
+                            reactions={msgReactions}
+                            onToggleReaction={handlePillToggle}
+                            onOpenMedia={handleMediaChange}
+                            onRetry={
+                              msg.status === "failed" &&
+                              (msg.content_type === "text" ||
+                                ["image", "video", "document", "audio"].includes(
+                                  msg.content_type,
+                                ))
+                                ? () => handleRetryMessage(msg)
+                                : undefined
+                            }
+                            onRetryMedia={
+                              msg.meta_media_id &&
+                              !msg.media_url &&
+                              msg.sender_type === "customer"
+                                ? () => void handleRetryMedia(msg)
+                                : undefined
+                            }
+                          />
+                        </MessageActions>
+                      </Fragment>
                     );
                   })}
                 </div>
@@ -1285,6 +1580,8 @@ export function MessageThread({
       <AiThreadBanner
         conversationId={conversation.id}
         disabled={conversation.ai_autoreply_disabled ?? false}
+        pauseReason={conversation.ai_pause_reason}
+        pausedAt={conversation.ai_paused_at}
         handoffSummary={conversation.ai_handoff_summary}
         assignedAgentId={assignedAgentId}
         currentUserId={user?.id}
@@ -1305,6 +1602,7 @@ export function MessageThread({
         onOpenTemplates={handleOpenTemplates}
         replyTo={replyTo}
         onClearReply={() => setReplyTo(null)}
+        onTyping={handleTyping}
       />
 
       <TemplatePicker
@@ -1312,6 +1610,22 @@ export function MessageThread({
         onOpenChange={setTemplateModalOpen}
         onSelect={handleSendTemplate}
       />
+
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-popover-foreground">
+              {tActivity("title")}
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              {displayName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto pr-1">
+            <ContactActivity contact={contact} showHeader={false} />
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Full-size viewer for the thread's images/videos. Renders nothing
           until a bubble opens it. */}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { AiConfig } from './types'
+import { AiError, type AiConfig } from './types'
 
 // Shared, hoisted mock state so the module mocks can close over it.
 const h = vi.hoisted(() => ({
@@ -318,12 +318,26 @@ describe('dispatchInboundToAiReply — handoff', () => {
     await dispatchInboundToAiReply(ARGS)
     expect(h.engineSendText).not.toHaveBeenCalled()
     expect(h.state.rpcCalls).toHaveLength(0)
-    expect(h.state.updatePayload).toMatchObject({ ai_autoreply_disabled: true })
+    expect(h.state.updatePayload).toMatchObject({
+      ai_autoreply_disabled: true,
+      ai_pause_reason: 'handoff',
+    })
+    expect(h.state.updatePayload?.ai_paused_at).toEqual(expect.any(String))
     expect(h.state.updatePayload?.ai_handoff_summary).toContain(
       'AI agent handed off',
     )
-    // No handoff target configured → conversation left unassigned.
+    // No handoff target configured — conversation left unassigned.
     expect(h.state.updatePayload).not.toHaveProperty('assigned_agent_id')
+  })
+
+  it('records empty_response when the model returns no text and no handoff', async () => {
+    h.generateReply.mockResolvedValue({ text: '', handoff: false })
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.engineSendText).not.toHaveBeenCalled()
+    expect(h.state.updatePayload).toMatchObject({
+      ai_autoreply_disabled: true,
+      ai_pause_reason: 'empty_response',
+    })
   })
 
   it('routes to the configured handoff agent on handoff', async () => {
@@ -346,5 +360,31 @@ describe('dispatchInboundToAiReply — handoff', () => {
     expect(pause?.isNull).toEqual([])
     expect(assign?.payload).toEqual({ assigned_agent_id: 'agent-7' })
     expect(assign?.isNull).toEqual(['assigned_agent_id'])
+  })
+
+  it('records quota when the provider rate-limits the call', async () => {
+    h.generateReply.mockRejectedValue(
+      new AiError('rate limited', { code: 'rate_limited' }),
+    )
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.engineSendText).not.toHaveBeenCalled()
+    expect(h.state.updatePayload).toMatchObject({
+      ai_autoreply_disabled: true,
+      ai_pause_reason: 'quota',
+      ai_handoff_summary: 'rate limited',
+    })
+  })
+
+  it('records provider_error when the provider rejects the key', async () => {
+    h.generateReply.mockRejectedValue(
+      new AiError('bad key', { code: 'invalid_key' }),
+    )
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.engineSendText).not.toHaveBeenCalled()
+    expect(h.state.updatePayload).toMatchObject({
+      ai_autoreply_disabled: true,
+      ai_pause_reason: 'provider_error',
+      ai_handoff_summary: 'bad key',
+    })
   })
 })

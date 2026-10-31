@@ -40,6 +40,7 @@ import { useTranslations } from 'next-intl';
 import { useAuth } from '@/hooks/use-auth';
 
 type InviteRole = 'admin' | 'agent' | 'viewer';
+type DepartmentRole = 'manager' | 'supervisor' | 'agent' | 'viewer';
 
 interface InviteMemberDialogProps {
   open: boolean;
@@ -47,6 +48,9 @@ interface InviteMemberDialogProps {
   /** Called after a successful create so the parent re-fetches the
    *  pending-invitations list. */
   onCreated: () => void;
+  /** Optional department assignment for this invite. */
+  departmentId?: string | null;
+  departmentName?: string | null;
 }
 
 const EXPIRY_OPTIONS = [
@@ -73,13 +77,17 @@ export function InviteMemberDialog({
   open,
   onOpenChange,
   onCreated,
+  departmentId = null,
+  departmentName = null,
 }: InviteMemberDialogProps) {
   const t = useTranslations('Settings.invite');
   const tRoles = useTranslations('Settings.roles');
+  const tDeptRoles = useTranslations('Settings.organization.roles');
   const { account } = useAuth();
   const [role, setRole] = useState<InviteRole>('agent');
   const [expiry, setExpiry] = useState<string>('7');
   const [label, setLabel] = useState('');
+  const [departmentRole, setDepartmentRole] = useState<DepartmentRole>('agent');
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<CreatedInvite | null>(null);
 
@@ -87,6 +95,7 @@ export function InviteMemberDialog({
     setRole('agent');
     setExpiry('7');
     setLabel('');
+    setDepartmentRole('agent');
     setResult(null);
     setSubmitting(false);
   }
@@ -112,6 +121,8 @@ export function InviteMemberDialog({
           role,
           expiresInDays: Number(expiry),
           label: trimmedLabel || undefined,
+          department_id: departmentId ?? undefined,
+          department_role: departmentId ? departmentRole : undefined,
         }),
       });
 
@@ -260,9 +271,15 @@ export function InviteMemberDialog({
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle className="text-popover-foreground">{t('dialogTitle')}</DialogTitle>
+              <DialogTitle className="text-popover-foreground">
+                {departmentName
+                  ? t('departmentDialogTitle', { department: departmentName })
+                  : t('dialogTitle')}
+              </DialogTitle>
               <DialogDescription className="text-muted-foreground">
-                {t('dialogDesc')}
+                {departmentName
+                  ? t('departmentDialogDesc', { department: departmentName })
+                  : t('dialogDesc')}
               </DialogDescription>
             </DialogHeader>
 
@@ -286,6 +303,30 @@ export function InviteMemberDialog({
                   {tRoles(`${role}Hint` as 'adminHint' | 'agentHint' | 'viewerHint')}
                 </p>
               </div>
+
+              {departmentId && (
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">
+                    {tDeptRoles('departmentRoleLabel')}
+                  </Label>
+                  <Select
+                    value={departmentRole}
+                    onValueChange={(v) =>
+                      v && setDepartmentRole(v as DepartmentRole)
+                    }
+                  >
+                    <SelectTrigger className="w-full bg-muted border-border text-foreground">
+                      <SelectValue>{tDeptRoles(departmentRole)}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="manager">{tDeptRoles('manager')}</SelectItem>
+                      <SelectItem value="supervisor">{tDeptRoles('supervisor')}</SelectItem>
+                      <SelectItem value="agent">{tDeptRoles('agent')}</SelectItem>
+                      <SelectItem value="viewer">{tDeptRoles('viewer')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label className="text-muted-foreground">{t('validForLabel')}</Label>

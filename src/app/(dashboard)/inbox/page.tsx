@@ -526,6 +526,10 @@ function InboxPageInner() {
     []
   );
 
+  const handleRemoveMessage = useCallback((id: string) => {
+    setMessages((prev) => prev.filter((m) => m.id !== id));
+  }, []);
+
   const handleStatusChange = useCallback(
     (conversationId: string, status: ConversationStatus) => {
       setConversations((prev) =>
@@ -543,20 +547,49 @@ function InboxPageInner() {
       setConversations((prev) =>
         prev.map((c) =>
           c.id === conversationId
-            ? { ...c, assigned_agent_id: assignedAgentId ?? undefined }
+            ? { ...c, assigned_agent_id: assignedAgentId }
             : c
         )
       );
       if (activeConversation?.id === conversationId) {
         setActiveConversation((prev) =>
-          prev
-            ? { ...prev, assigned_agent_id: assignedAgentId ?? undefined }
-            : prev
+          prev ? { ...prev, assigned_agent_id: assignedAgentId } : prev
         );
       }
     },
     [activeConversation]
   );
+
+  const applyConversationPatch = useCallback(
+    (ids: string[], patch: Partial<Conversation>) => {
+      const idSet = new Set(ids);
+      setConversations((prev) =>
+        prev.map((c) => (idSet.has(c.id) ? { ...c, ...patch } : c))
+      );
+      if (activeConversation && idSet.has(activeConversation.id)) {
+        setActiveConversation((prev) => (prev ? { ...prev, ...patch } : prev));
+      }
+    },
+    [activeConversation]
+  );
+
+  const handleBulkUpdated = useCallback(
+    (ids: string[], patch: Partial<Conversation>) => {
+      applyConversationPatch(ids, patch);
+    },
+    [applyConversationPatch]
+  );
+
+  const handleConversationPatched = useCallback(
+    (id: string, patch: Partial<Conversation>) => {
+      applyConversationPatch([id], patch);
+    },
+    [applyConversationPatch]
+  );
+
+  const handleRequestResync = useCallback(() => {
+    setResyncToken((token) => token + 1);
+  }, []);
 
   // On mobile (<lg) we show a SINGLE pane — either the list or the
   // thread — rather than cramming both side-by-side. Selecting a
@@ -594,6 +627,9 @@ function InboxPageInner() {
             conversations={conversations}
             onConversationsLoaded={handleConversationsLoaded}
             resyncToken={resyncToken}
+            onBulkUpdated={handleBulkUpdated}
+            onConversationPatched={handleConversationPatched}
+            onRequestResync={handleRequestResync}
             initialFilter={parseInboxFilter(searchParams.get("filter"))}
           />
         </div>
@@ -622,6 +658,7 @@ function InboxPageInner() {
             onOlderMessagesLoaded={handleOlderMessagesLoaded}
             onNewMessage={handleNewMessage}
             onUpdateMessage={handleUpdateMessage}
+            onRemoveMessage={handleRemoveMessage}
             onStatusChange={handleStatusChange}
             onAssignChange={handleAssignChange}
             onBack={handleCloseConversation}

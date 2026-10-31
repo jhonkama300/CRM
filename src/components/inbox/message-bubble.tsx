@@ -52,6 +52,10 @@ interface MessageBubbleProps {
    * stays inline and non-clickable.
    */
   onOpenMedia?: (messageId: string) => void;
+  /** Retry an outbound message that failed to send. */
+  onRetry?: () => void;
+  /** Retry the inbound media mirror/download for this message. */
+  onRetryMedia?: () => void;
 }
 
 /**
@@ -167,13 +171,15 @@ function MessageContent({
   t,
   isAgent,
   onOpenMedia,
+  onRetryMedia,
 }: {
   message: Message;
   template: MessageTemplate | null;
   t: ReturnType<typeof useTranslations>;
-  /** Outbound bubbles sit on the primary fill — badges must invert. */
+  /** Outbound bubbles sit on the primary fill - badges must invert. */
   isAgent: boolean;
   onOpenMedia?: (messageId: string) => void;
+  onRetryMedia?: () => void;
 }) {
   // Passed to the media bubbles as a no-arg callback; `undefined` when the
   // parent wired up no viewer, which is what makes them non-clickable.
@@ -193,7 +199,7 @@ function MessageContent({
           {message.media_url ? (
             <MediaImageBubble message={message} onOpen={openMedia} t={t} />
           ) : (
-            <MediaUnavailable label={t("photo")} t={t} />
+            <MediaUnavailable label={t("photo")} t={t} onRetry={onRetryMedia} />
           )}
           {message.content_text && (
             <p className="mt-1 whitespace-pre-wrap break-words text-sm">
@@ -209,7 +215,7 @@ function MessageContent({
           {message.media_url ? (
             <MediaVideoBubble message={message} onOpen={openMedia} t={t} />
           ) : (
-            <MediaUnavailable label={t("video")} t={t} />
+            <MediaUnavailable label={t("video")} t={t} onRetry={onRetryMedia} />
           )}
           {message.content_text && (
             <p className="mt-1 whitespace-pre-wrap break-words text-sm">
@@ -225,14 +231,14 @@ function MessageContent({
           {message.media_url ? (
             <MediaAudioBubble message={message} t={t} />
           ) : (
-            <MediaUnavailable label={t("audio")} t={t} />
+            <MediaUnavailable label={t("audio")} t={t} onRetry={onRetryMedia} />
           )}
         </div>
       );
 
     case "document":
       if (!message.media_url) {
-        return <MediaUnavailable label={message.content_text || t("document")} t={t} />;
+        return <MediaUnavailable label={message.content_text || t("document")} t={t} onRetry={onRetryMedia} />;
       }
       return <MediaDocumentBubble message={message} t={t} />;
 
@@ -369,6 +375,8 @@ export function MessageBubble({
   reactions,
   onToggleReaction,
   onOpenMedia,
+  onRetry,
+  onRetryMedia,
 }: MessageBubbleProps) {
   const t = useTranslations("Inbox.bubble");
 
@@ -406,6 +414,7 @@ export function MessageBubble({
           t={t}
           isAgent={isAgent}
           onOpenMedia={onOpenMedia}
+          onRetryMedia={onRetryMedia}
         />
         <div
           className={cn(
@@ -442,12 +451,20 @@ export function MessageBubble({
         </div>
       </div>
       {failure && (
-        <p
-          className="mt-0.5 px-1 text-[10px] leading-tight text-muted-foreground"
-          title={failure}
-        >
-          {t("notDelivered")}: {failure}
-        </p>
+        <div className="mt-0.5 flex items-center gap-2 px-1 text-[10px] leading-tight text-muted-foreground">
+          <span className="min-w-0" title={failure}>
+            {t("notDelivered")}: {failure}
+          </span>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="shrink-0 font-medium text-primary hover:underline"
+            >
+              {t("retry")}
+            </button>
+          )}
+        </div>
       )}
       {reactions && reactions.length > 0 && onToggleReaction && (
         <MessageReactions

@@ -146,7 +146,7 @@ export async function GET() {
     const { data, error } = await ctx.supabase
       .from("account_invitations")
       .select(
-        "id, role, label, created_by_user_id, created_at, expires_at, accepted_at, accepted_by_user_id",
+        "id, role, label, created_by_user_id, created_at, expires_at, accepted_at, accepted_by_user_id, department_id, department_role",
       )
       .eq("account_id", ctx.accountId)
       .is("accepted_at", null)
@@ -182,7 +182,13 @@ export async function POST(request: Request) {
     if (!limit.success) return rateLimitResponse(limit);
 
     const body = (await request.json().catch(() => null)) as
-      | { role?: unknown; expiresInDays?: unknown; label?: unknown }
+      | {
+          role?: unknown;
+          expiresInDays?: unknown;
+          label?: unknown;
+          department_id?: unknown;
+          department_role?: unknown;
+        }
       | null;
 
     const role = body?.role;
@@ -217,6 +223,34 @@ export async function POST(request: Request) {
       label = trimmed === "" ? null : trimmed;
     }
 
+    const departmentId =
+      typeof body?.department_id === "string" && body.department_id.trim()
+        ? body.department_id.trim()
+        : null;
+    const departmentRoleRaw = body?.department_role;
+    const departmentRole =
+      departmentId &&
+      typeof departmentRoleRaw === "string" &&
+      ["manager", "supervisor", "agent", "viewer"].includes(departmentRoleRaw)
+        ? departmentRoleRaw
+        : departmentId
+          ? "agent"
+          : null;
+    if (departmentId) {
+      const { data: department } = await ctx.supabase
+        .from("departments")
+        .select("id")
+        .eq("id", departmentId)
+        .eq("account_id", ctx.accountId)
+        .maybeSingle();
+      if (!department) {
+        return NextResponse.json(
+          { error: t('account.invitations.departmentInvalid') },
+          { status: 400 },
+        );
+      }
+    }
+
     const { token, hash } = generateInviteToken();
 
     const { data, error } = await ctx.supabase
@@ -227,9 +261,13 @@ export async function POST(request: Request) {
         role,
         created_by_user_id: ctx.userId,
         label,
+        department_id: departmentId,
+        department_role: departmentRole,
         expires_at: expiresAt.toISOString(),
       })
-      .select("id, role, label, expires_at, created_at")
+      .select(
+        "id, role, label, expires_at, created_at, department_id, department_role",
+      )
       .single();
 
     if (error || !data) {

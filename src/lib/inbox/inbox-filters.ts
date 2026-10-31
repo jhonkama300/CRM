@@ -34,6 +34,42 @@ export function isWindowClosing(c: Conversation, now: number): boolean {
   return closesAt > now && closesAt - now <= EXPIRING_WITHIN_MS;
 }
 
+export type AttentionLevel = "none" | "ok" | "warning" | "critical";
+
+/**
+ * SLA-style signal for the conversation list. The account's configured
+ * reply target is not available in the list payload, so v1 uses a
+ * conservative 15-minute target: amber after 15 min, red after 60.
+ */
+export function attentionLevel(
+  c: Conversation,
+  now: number,
+  targetMinutes = 15,
+): AttentionLevel {
+  if (!isAwaitingReply(c) || !c.last_inbound_at) return "none";
+  const waitedMinutes =
+    (now - new Date(c.last_inbound_at).getTime()) / 60_000;
+  if (waitedMinutes < targetMinutes) return "ok";
+  if (waitedMinutes < targetMinutes * 4) return "warning";
+  return "critical";
+}
+
+export function minutesWaiting(c: Conversation, now: number): number {
+  if (!c.last_inbound_at) return 0;
+  return Math.max(
+    0,
+    Math.floor((now - new Date(c.last_inbound_at).getTime()) / 60_000),
+  );
+}
+
+export function isSnoozed(c: Conversation, now: number): boolean {
+  return !!c.snoozed_until && new Date(c.snoozed_until).getTime() > now;
+}
+
+export function isFollowUpDue(c: Conversation, now: number): boolean {
+  return !!c.follow_up_at && new Date(c.follow_up_at).getTime() <= now;
+}
+
 function byOldestInbound(a: Conversation, b: Conversation): number {
   return (a.last_inbound_at ?? "").localeCompare(b.last_inbound_at ?? "");
 }

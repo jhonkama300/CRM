@@ -44,6 +44,7 @@ import { useTranslations } from 'next-intl';
 import { planCustomValueWrites } from '@/lib/contacts/custom-value-writes';
 import { contactHandle } from '@/lib/whatsapp/wa-identity';
 import { parseInternationalPhone } from '@/lib/whatsapp/phone-utils';
+import { ContactActivity } from '@/components/inbox/contact-activity';
 
 interface ContactDetailViewProps {
   open: boolean;
@@ -472,6 +473,12 @@ export function ContactDetailView({
                   {t('tabs.details')}
                 </TabsTrigger>
                 <TabsTrigger
+                  value="activity"
+                  className="data-active:bg-muted data-active:text-primary text-muted-foreground"
+                >
+                  {t('tabs.activity')}
+                </TabsTrigger>
+                <TabsTrigger
                   value="tags"
                   className="data-active:bg-muted data-active:text-primary text-muted-foreground"
                 >
@@ -756,6 +763,11 @@ export function ContactDetailView({
                     ))}
                   </div>
                 )}
+              </TabsContent>
+
+              {/* Activity Tab */}
+              <TabsContent value="activity" className="flex-1 overflow-y-auto px-4 py-3">
+                {contact && <ContactActivity contact={contact} />}
               </TabsContent>
             </Tabs>
           </div>

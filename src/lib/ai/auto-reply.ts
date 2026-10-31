@@ -3,6 +3,7 @@ import { loadAiConfig } from './config'
 import { buildConversationContext } from './context'
 import { retrieveKnowledge } from './knowledge'
 import { generateReply } from './generate'
+import { AiError } from './types'
 import { buildSystemPrompt } from './defaults'
 import { buildHandoffSummary } from './handoff'
 import { logAiUsage } from './usage'
@@ -136,11 +137,26 @@ export async function dispatchInboundToAiReply(
       knowledge,
     })
 
-    const { text, handoff, usage } = await generateReply({
-      config,
-      systemPrompt,
-      messages,
-    })
+    let generated: Awaited<ReturnType<typeof generateReply>>
+    try {
+      generated = await generateReply({
+        config,
+        systemPrompt,
+        messages,
+      })
+    } catch (err) {
+      // A hard provider failure is actionable: show the reason in the
+      // inbox banner instead of silently retrying (and burning quota)
+      // on every subsequent inbound. Transient 5xx/timeouts stay
+      // retryable and are only logged.
+      if (err instanceof AiError && err.code === 'rate_limited') {
+        await pauseConversation(db, conversationId, 'quota', err.message)
+      } else if (err instanceof AiError && err.code === 'invalid_key') {
+        await pauseConversation(db, conversationId, 'provider_error', err.message)
+      }
+      throw err
+    }
+    const { text, handoff, usage } = generated
 
     // Record token spend on the account's BYO key. Fire-and-forget so it
     // never adds latency to the customer-facing send: `logAiUsage`
@@ -168,10 +184,12 @@ export async function dispatchInboundToAiReply(
         messages,
         replyCount: conv.ai_reply_count ?? 0,
       })
-      await db
-        .from('conversations')
-        .update({ ai_autoreply_disabled: true, ai_handoff_summary: summary })
-        .eq('id', conversationId)
+      await pauseConversation(
+        db,
+        conversationId,
+        handoff ? 'handoff' : 'empty_response',
+        summary,
+      )
       // Only set the assignee when a target is configured AND the thread
       // isn't already owned — never stomp an existing human assignment.
       if (config.handoffAgentId) {
@@ -223,6 +241,27 @@ export async function dispatchInboundToAiReply(
     })
   } catch (err) {
     console.error('[ai auto-reply] dispatch failed:', err)
+  }
+}
+
+async function pauseConversation(
+  db: ReturnType<typeof supabaseAdmin>,
+  conversationId: string,
+  reason: 'handoff' | 'empty_response' | 'quota' | 'provider_error',
+  summary?: string | null,
+): Promise<void> {
+  const update: Record<string, unknown> = {
+    ai_autoreply_disabled: true,
+    ai_pause_reason: reason,
+    ai_paused_at: new Date().toISOString(),
+  }
+  if (summary) update.ai_handoff_summary = summary
+  const { error } = await db
+    .from('conversations')
+    .update(update)
+    .eq('id', conversationId)
+  if (error) {
+    console.error('[ai auto-reply] pause update failed:', error)
   }
 }
 

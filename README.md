@@ -78,13 +78,16 @@ in an afternoon and make yours.
 
 ## Quick start
 
+Requires Node 22.12+ and pnpm 12 (`corepack enable pnpm` if you don't
+already have it installed).
+
 ```bash
 # Fork on GitHub first: https://github.com/ArnasDon/wacrm → Fork
 git clone https://github.com/<your-username>/wacrm.git
 cd wacrm
-npm install
+pnpm install
 cp .env.local.example .env.local   # fill in Supabase + Meta creds
-npm run dev
+pnpm run dev
 ```
 
 Open <http://localhost:3000>. You'll be redirected to `/login` (or

@@ -258,14 +258,44 @@ export async function sendMessageToConversation(
   const hasValidPhone = resolvedTarget.isPhone;
   const sanitizedPhone = hasValidPhone ? sendTarget : '';
 
-  // WhatsApp config, account-scoped.
-  const { data: config, error: configError } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', accountId)
-    .single();
+  // Resolve the channel that owns this conversation. Falls back to the
+  // legacy single-number config for rows created before channels existed.
+  let credentialTable: 'channels' | 'whatsapp_config' = 'whatsapp_config';
+  let config:
+    | { id: string; access_token: string; phone_number_id: string }
+    | null = null;
 
-  if (configError || !config) {
+  if (conversation.channel_id) {
+    const { data: channel } = await db
+      .from('channels')
+      .select('id, access_token, phone_number_id')
+      .eq('id', conversation.channel_id)
+      .eq('account_id', accountId)
+      .maybeSingle();
+    if (channel) {
+      credentialTable = 'channels';
+      config = channel;
+    }
+  }
+
+  if (!config) {
+    const { data: legacyConfig, error: configError } = await db
+      .from('whatsapp_config')
+      .select('*')
+      .eq('account_id', accountId)
+      .single();
+
+    if (configError || !legacyConfig) {
+      throw new SendMessageError(
+        'whatsapp_not_configured',
+        'WhatsApp not configured. Please set up your WhatsApp integration first.',
+        400
+      );
+    }
+    config = legacyConfig;
+  }
+
+  if (!config) {
     throw new SendMessageError(
       'whatsapp_not_configured',
       'WhatsApp not configured. Please set up your WhatsApp integration first.',
@@ -278,7 +308,7 @@ export async function sendMessageToConversation(
   // Self-heal legacy CBC ciphertexts. Fire-and-forget; idempotent.
   if (isLegacyFormat(config.access_token)) {
     void db
-      .from('whatsapp_config')
+      .from(credentialTable)
       .update({ access_token: encrypt(accessToken) })
       .eq('id', config.id)
       .then(({ error }: { error: { message: string } | null }) => {

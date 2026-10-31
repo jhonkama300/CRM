@@ -15,12 +15,22 @@ import {
   DollarSign,
   StickyNote,
   Plus,
+  Activity,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { useTranslations } from "next-intl";
 import { contactHandle } from "@/lib/whatsapp/wa-identity";
+import { ContactActivity } from "./contact-activity";
 
 interface ContactSidebarProps {
   contact: Contact | null;
@@ -29,6 +39,7 @@ interface ContactSidebarProps {
 export function ContactSidebar({ contact }: ContactSidebarProps) {
   const tSidebar = useTranslations("Inbox.sidebar");
   const tThread = useTranslations("Inbox.messageThread");
+  const tActivity = useTranslations("Inbox.activity");
 
   const { accountId } = useAuth();
   const [copied, setCopied] = useState(false);
@@ -37,6 +48,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const [tags, setTags] = useState<(Tag & { contact_tag_id: string })[]>([]);
   const [newNote, setNewNote] = useState("");
   const [addingNote, setAddingNote] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
 
   const fetchContactData = useCallback(async () => {
     if (!contact) return;
@@ -302,8 +314,36 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
               </div>
             </div>
           </div>
+
+          <div className="my-4 border-t border-border" />
+
+          <button
+            type="button"
+            onClick={() => setActivityOpen(true)}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <Activity className="h-4 w-4" />
+            <span className="flex-1 text-left">{tActivity("open")}</span>
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
         </div>
       </ScrollArea>
+
+      <Dialog open={activityOpen} onOpenChange={setActivityOpen}>
+        <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-popover-foreground">
+              {tActivity("title")}
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              {displayName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto pr-1">
+            <ContactActivity contact={contact} showHeader={false} />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { LogOut, Menu, Settings as SettingsIcon, User } from "lucide-react";
+import { LogOut, Menu, Search, Settings as SettingsIcon, User } from "lucide-react";
 import {
   Avatar,
   AvatarFallback,
@@ -74,6 +74,20 @@ export function Header({ onOpenSidebar }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2">
+        <button
+          type="button"
+          onClick={() =>
+            window.dispatchEvent(new Event("wacrm:command-palette"))
+          }
+          aria-label={t("search")}
+          className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Search className="h-4 w-4" />
+          <span className="hidden md:inline">{t("search")}</span>
+          <kbd className="hidden rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium md:inline">
+            ⌘K
+          </kbd>
+        </button>
         <ModeToggle />
 
         <DropdownMenu>
