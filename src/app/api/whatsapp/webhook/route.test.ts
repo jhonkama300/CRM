@@ -78,6 +78,12 @@ vi.mock('@supabase/supabase-js', () => ({
               },
             }),
           }
+        case 'channels':
+          return {
+            select: () => ({
+              eq: () => Promise.resolve({ data: [], error: null }),
+            }),
+          }
         case 'conversations':
           // findOrCreateConversation: select().eq().eq().order().limit()
           return {

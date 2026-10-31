@@ -51,6 +51,8 @@ interface BroadcastPayload {
    * falls back to the template's stored URL only when this is empty.
    */
   headerMediaUrl?: string;
+  /** Channel/number used to send this campaign. */
+  channelId?: string | null;
 }
 
 export type BroadcastSendInterruption = 'lease_lost' | 'lease_error';
@@ -336,6 +338,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
           user_id: user.id,
           account_id: accountId,
           name: payload.name,
+          channel_id: payload.channelId ?? null,
           template_name: payload.template.name,
           template_language: payload.template.language ?? 'en_US',
           template_variables: payload.variables,
@@ -499,6 +502,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 recipients: apiRecipients,
+                channel_id: payload.channelId ?? null,
                 template_name: payload.template.name,
                 template_language: payload.template.language ?? 'en_US',
               }),

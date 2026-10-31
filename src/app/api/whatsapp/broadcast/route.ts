@@ -92,6 +92,7 @@ export async function POST(request: Request) {
       template_name,
       template_language,
       template_params,
+      channel_id,
     } = body
 
     // Normalize to a list of {phone, params} regardless of shape.
@@ -123,23 +124,39 @@ export async function POST(request: Request) {
       )
     }
 
-    const { data: config, error: configError } = await supabase
-      .from('whatsapp_config')
-      .select('*')
-      .eq('account_id', accountId)
-      .single()
+    let channel = null as
+      | { id: string; phone_number_id: string; access_token: string }
+      | null
 
-    if (configError || !config) {
+    if (typeof channel_id === 'string' && channel_id.trim()) {
+      const { data } = await supabase
+        .from('channels')
+        .select('id, phone_number_id, access_token')
+        .eq('id', channel_id.trim())
+        .eq('account_id', accountId)
+        .maybeSingle()
+      channel = data
+    }
+
+    if (!channel) {
+      const { data } = await supabase
+        .from('channels')
+        .select('id, phone_number_id, access_token')
+        .eq('account_id', accountId)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      channel = data
+    }
+
+    if (!channel) {
       return NextResponse.json(
-        {
-          error:
-            t('common.whatsappNotConfiguredSetup'),
-        },
-        { status: 400 }
+        { error: t('common.whatsappNotConfiguredSetup') },
+        { status: 400 },
       )
     }
 
-    const accessToken = decrypt(config.access_token)
+    const accessToken = decrypt(channel.access_token)
 
     // Load the template row once so sendTemplateMessage can build
     // header + button components on each iteration. Loading inside
@@ -189,7 +206,7 @@ export async function POST(request: Request) {
       for (const variant of variants) {
         try {
           const result = await sendTemplateMessage({
-            phoneNumberId: config.phone_number_id,
+            phoneNumberId: channel.phone_number_id,
             accessToken,
             to: variant,
             templateName: template_name,

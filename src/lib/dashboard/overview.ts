@@ -142,6 +142,7 @@ export interface DashboardOverview {
   generatedAt: string
   timeZone: string
   days: OverviewRange
+  channelId?: string | null
   unit: 'hour' | 'day'
   periodStart: string
   previousStart: string
@@ -177,8 +178,11 @@ export async function loadOverview(
   db: SupabaseClient,
   days: OverviewRange,
   timeZone: string,
+  channelId?: string | null,
 ): Promise<DashboardOverview> {
-  const { data, error } = await db.rpc('dashboard_overview', { p_days: days, p_tz: timeZone })
+  const params: Record<string, unknown> = { p_days: days, p_tz: timeZone }
+  if (channelId) params.p_channel_id = channelId
+  const { data, error } = await db.rpc('dashboard_overview', params)
   if (error) throw error
   return data as DashboardOverview
 }

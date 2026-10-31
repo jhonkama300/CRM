@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { countAudience, type AudienceConfig } from '@/lib/broadcast-audience';
 import { createClient } from '@/lib/supabase/client';
-import { MessageTemplate } from '@/types';
+import { Channel, MessageTemplate } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -17,6 +17,14 @@ import {
 } from '@/components/ui/dialog';
 import { ArrowLeft, Send, Loader2, Users, Save } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface Step4Props {
   name: string;
@@ -28,6 +36,9 @@ interface Step4Props {
   onBack: () => void;
   isProcessing: boolean;
   progress: number;
+  channels: Channel[];
+  channelId: string | null;
+  onChannelChange: (value: string) => void;
 }
 
 export function Step4ScheduleSend({
@@ -40,6 +51,9 @@ export function Step4ScheduleSend({
   onBack,
   isProcessing,
   progress,
+  channels,
+  channelId,
+  onChannelChange,
 }: Step4Props) {
   const t = useTranslations('Broadcasts.wizard');
   const [showConfirm, setShowConfirm] = useState(false);
@@ -78,6 +92,29 @@ export function Step4ScheduleSend({
           {t('scheduleSend.subtitle')}
         </p>
       </div>
+
+      {channels.length > 0 && (
+        <div>
+          <Label className="mb-1.5 block text-sm font-medium text-foreground">
+            {t('scheduleSend.channel')}
+          </Label>
+          <Select
+            value={channelId ?? channels[0]?.id ?? ''}
+            onValueChange={(value) => value && onChannelChange(value)}
+          >
+            <SelectTrigger className="border-border bg-muted text-foreground">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {channels.map((channel) => (
+                <SelectItem key={channel.id} value={channel.id}>
+                  {channel.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {/* Broadcast Name */}
       <div>

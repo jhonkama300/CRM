@@ -20,6 +20,11 @@ function makeSupabaseMock() {
           return { data: { id: 'acct-1', name: 'Acme' }, error: null }
         case 'whatsapp_config':
           return { data: { waba_id: 'waba-1', access_token: 'enc' }, error: null }
+        case 'channels':
+          return {
+            data: { id: 'chan-1', waba_id: 'waba-1', access_token: 'enc' },
+            error: null,
+          }
         case 'message_templates':
           return write
             ? { data: { id: 'tpl-1', ...write.row }, error: null }
@@ -36,6 +41,8 @@ function makeSupabaseMock() {
         return b
       })
     }
+    b.order = vi.fn(() => b)
+    b.limit = vi.fn(() => b)
     for (const kind of ['insert', 'update'] as const) {
       b[kind] = vi.fn((row: Record<string, unknown>) => {
         write = { kind, row, filters: [] }

@@ -7,29 +7,61 @@ const BROADCAST_STATUS_KEYS = new Set(['draft', 'scheduled', 'sending', 'sent', 
 
 type DB = SupabaseClient
 
-export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> {
+export async function loadActivity(
+  db: DB,
+  limit = 20,
+  channelId?: string | null,
+): Promise<ActivityItem[]> {
   const [msgs, contacts, deals, broadcasts, autoLogs] = await Promise.all([
-    db
-      .from('messages')
-      .select('id, content_text, sender_type, created_at, conversation_id, conversations(contact_id, contacts(name, phone))')
-      .eq('sender_type', 'customer')
-      .order('created_at', { ascending: false })
-      .limit(40),
+    channelId
+      ? db
+          .from('messages')
+          .select(
+            'id, content_text, sender_type, created_at, conversation_id, conversations!inner(contact_id, contacts(name, phone))',
+          )
+          .eq('sender_type', 'customer')
+          .eq('conversations.channel_id', channelId)
+          .order('created_at', { ascending: false })
+          .limit(40)
+      : db
+          .from('messages')
+          .select(
+            'id, content_text, sender_type, created_at, conversation_id, conversations(contact_id, contacts(name, phone))',
+          )
+          .eq('sender_type', 'customer')
+          .order('created_at', { ascending: false })
+          .limit(40),
     db
       .from('contacts')
       .select('id, name, phone, created_at')
       .order('created_at', { ascending: false })
       .limit(10),
-    db
-      .from('deals')
-      .select('id, title, updated_at, stage:pipeline_stages(name)')
-      .order('updated_at', { ascending: false })
-      .limit(10),
-    db
-      .from('broadcasts')
-      .select('id, name, status, total_recipients, created_at')
-      .order('created_at', { ascending: false })
-      .limit(5),
+    channelId
+      ? db
+          .from('deals')
+          .select(
+            'id, title, updated_at, stage:pipeline_stages(name), conversation:conversations!inner(channel_id)',
+          )
+          .eq('conversation.channel_id', channelId)
+          .order('updated_at', { ascending: false })
+          .limit(10)
+      : db
+          .from('deals')
+          .select('id, title, updated_at, stage:pipeline_stages(name)')
+          .order('updated_at', { ascending: false })
+          .limit(10),
+    channelId
+      ? db
+          .from('broadcasts')
+          .select('id, name, status, total_recipients, created_at')
+          .eq('channel_id', channelId)
+          .order('created_at', { ascending: false })
+          .limit(5)
+      : db
+          .from('broadcasts')
+          .select('id, name, status, total_recipients, created_at')
+          .order('created_at', { ascending: false })
+          .limit(5),
     db
       .from('automation_logs')
       .select('id, trigger_event, status, created_at, automation:automations(name), contact:contacts(name, phone)')
@@ -73,7 +105,7 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
     })
   }
 
-  for (const c of (contacts.data ?? []) as Array<{ id: string; name: string | null; phone: string; created_at: string }>) {
+  if (!channelId) for (const c of (contacts.data ?? []) as Array<{ id: string; name: string | null; phone: string; created_at: string }>) {
     items.push({
       id: `contact-${c.id}`,
       kind: 'contact',
@@ -124,7 +156,7 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
     })
   }
 
-  for (const l of (autoLogs.data ?? []) as unknown as Array<{
+  if (!channelId) for (const l of (autoLogs.data ?? []) as unknown as Array<{
     id: string
     trigger_event: string
     status: string

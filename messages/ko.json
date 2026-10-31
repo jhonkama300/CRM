@@ -173,7 +173,9 @@
         "newContact": "새 연락처",
         "newDeal": "새 딜",
         "newBroadcast": "새 브로드캐스트",
-        "newAutomation": "새 자동화"
+        "newAutomation": "새 자동화",
+        "allChannels": "모든 채널",
+        "channelLabel": "채널별 대시보드 필터"
       },
       "health": {
         "title": "WhatsApp 번호 상태",
@@ -363,6 +365,25 @@
         "hoursOnly": "{value}시간",
         "days": "{value}일 {remainder}시간",
         "daysOnly": "{value}일"
+      }
+    },
+    "channels": {
+      "title": "채널 성과",
+      "description": "선택한 기간의 WhatsApp 번호별 대화 및 메시지입니다.",
+      "manage": "채널 관리",
+      "quality": "품질",
+      "conversations": "대화",
+      "open": "열림",
+      "exportCsv": "CSV 내보내기",
+      "csv": {
+        "channel": "채널",
+        "phone": "전화번호",
+        "quality": "품질",
+        "conversations": "대화",
+        "open": "열림",
+        "inbound": "수신",
+        "outbound": "발신",
+        "failed": "실패"
       }
     }
   },
@@ -1202,7 +1223,8 @@
         "estimatedReach": "예상 도달 수",
         "language": "언어",
         "confirmTitle": "브로드캐스트 확인",
-        "confirmDesc": "<b>{template}</b> 템플릿으로 연락처 <b>{count, number}</b>명에게 이 브로드캐스트를 보내려고 합니다. 이 작업은 되돌릴 수 없습니다."
+        "confirmDesc": "<b>{template}</b> 템플릿으로 연락처 <b>{count, number}</b>명에게 이 브로드캐스트를 보내려고 합니다. 이 작업은 되돌릴 수 없습니다.",
+        "channel": "채널"
       }
     },
     "sending": {
@@ -1960,7 +1982,9 @@
         "Marketing": "마케팅",
         "Utility": "유틸리티",
         "Authentication": "인증"
-      }
+      },
+      "allChannels": "모든 채널",
+      "templateChannel": "채널"
     },
     "roles": {
       "departmentRoleLabel": "부서 역할",
@@ -2182,7 +2206,21 @@
       "updated": "채널이 업데이트되었습니다",
       "deleted": "채널이 삭제되었습니다",
       "deleteFailed": "채널을 삭제할 수 없습니다",
-      "networkError": "서버에 연결할 수 없습니다"
+      "networkError": "서버에 연결할 수 없습니다",
+      "test": "연결 테스트",
+      "testOk": "채널이 정상입니다",
+      "testFailed": "채널 테스트에 실패했습니다",
+      "lastChecked": "마지막 확인",
+      "quality": "품질",
+      "registered": "등록됨",
+      "notRegistered": "미등록",
+      "pin": "2단계 인증 PIN",
+      "pinPlaceholder": "6자리 PIN (선택)",
+      "pinHint": "/register가 필요한 프로덕션 번호에 필요합니다. 테스트 번호는 PIN 없이 저장할 수 있습니다.",
+      "connectWithMeta": "Meta와 연결",
+      "connecting": "연결 중...",
+      "metaCancelled": "Meta 가입이 취소되었습니다",
+      "metaTimeout": "Meta 가입 시간이 초과되었습니다. 다시 시도하세요."
     },
     "sections": {
       "overview": "개요",
@@ -2198,7 +2236,8 @@
       "organization": "회사 구조",
       "members": "팀원",
       "api": "API 키",
-      "channels": "채널"
+      "channels": "채널",
+      "health": "상태"
     },
     "groups": {
       "account": "계정",
@@ -2456,6 +2495,27 @@
       "textPlaceholder": "삽입할 메시지 텍스트",
       "cancel": "취소",
       "save": "저장"
+    },
+    "health": {
+      "title": "운영 상태",
+      "description": "WhatsApp, AI, cron 및 공개 URL 상태를 확인합니다.",
+      "whatsapp": "WhatsApp",
+      "ai": "AI 어시스턴트",
+      "cron": "Cron",
+      "siteUrl": "사이트 URL",
+      "refresh": "새로고침",
+      "notConfigured": "구성되지 않음",
+      "configured": "구성됨",
+      "channelsConnected": "채널 {count}개 연결됨",
+      "disconnected": "연결 끊김",
+      "channels": "채널",
+      "lastChecked": "마지막 확인",
+      "neverChecked": "확인한 적 없음",
+      "loadFailed": "상태를 불러올 수 없습니다",
+      "networkError": "서버에 연결할 수 없습니다",
+      "unknown": "알 수 없음",
+      "registered": "등록됨",
+      "notRegistered": "미등록"
     }
   },
   "SignupPage": {
@@ -3162,7 +3222,13 @@
       "alreadyExists": "이 계정에 {name} ({language}) 템플릿이 이미 있습니다. 새로 만들지 말고 기존 템플릿을 수정하거나 다시 제출하세요.",
       "submitFailed": "템플릿을 제출하지 못했습니다.",
       "metaApiStatus": "Meta API 오류: {status}",
-      "syncFailed": "템플릿을 동기화하지 못했습니다"
+      "syncFailed": "템플릿을 동기화하지 못했습니다",
+      "channelInvalid": "이 계정에 없는 채널입니다"
+    },
+    "channels": {
+      "invalidPhoneNumberId": "Phone Number ID가 올바르지 않습니다",
+      "invalidWabaId": "WABA ID가 올바르지 않습니다",
+      "phoneNotInWaba": "Phone Number ID가 해당 WABA에 없습니다"
     }
   }
 }

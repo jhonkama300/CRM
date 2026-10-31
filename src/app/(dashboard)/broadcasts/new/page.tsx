@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
-import { MessageTemplate } from '@/types';
+import { Channel, MessageTemplate } from '@/types';
 import { Step1ChooseTemplate } from '@/components/broadcasts/step1-choose-template';
 import { Step2SelectAudience } from '@/components/broadcasts/step2-select-audience';
 import { Step3Personalize } from '@/components/broadcasts/step3-personalize';
@@ -45,6 +45,19 @@ export default function NewBroadcastPage() {
   >({});
   const [headerMediaUrl, setHeaderMediaUrl] = useState('');
   const [name, setName] = useState('');
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [channelId, setChannelId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/channels', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : { channels: [] }))
+      .then((data) => {
+        const rows = (data.channels ?? []) as Channel[];
+        setChannels(rows);
+        setChannelId((current) => current ?? rows[0]?.id ?? null);
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleSend() {
     if (!template) return;
@@ -107,6 +120,7 @@ export default function NewBroadcastPage() {
       user_id: user.id,
       account_id: accountId,
       name: name.trim(),
+      channel_id: channelId,
       template_name: template.name,
       template_language: template.language ?? 'en_US',
       template_variables: variables,
@@ -228,6 +242,9 @@ export default function NewBroadcastPage() {
               onBack={() => setCurrentStep(2)}
               isProcessing={isProcessing}
               progress={progress}
+              channels={channels}
+              channelId={channelId}
+              onChannelChange={setChannelId}
             />
           )}
         </div>

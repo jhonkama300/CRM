@@ -173,7 +173,9 @@
         "newContact": "New contact",
         "newDeal": "New deal",
         "newBroadcast": "New broadcast",
-        "newAutomation": "New automation"
+        "newAutomation": "New automation",
+        "allChannels": "All channels",
+        "channelLabel": "Filter dashboard by channel"
       },
       "health": {
         "title": "WhatsApp number health",
@@ -363,6 +365,25 @@
         "hoursOnly": "{value} h",
         "days": "{value} d {remainder} h",
         "daysOnly": "{value} d"
+      }
+    },
+    "channels": {
+      "title": "Channel performance",
+      "description": "Conversations and messages by WhatsApp number in the selected range.",
+      "manage": "Manage channels",
+      "quality": "Quality",
+      "conversations": "Conversations",
+      "open": "Open",
+      "exportCsv": "Export CSV",
+      "csv": {
+        "channel": "Channel",
+        "phone": "Phone",
+        "quality": "Quality",
+        "conversations": "Conversations",
+        "open": "Open",
+        "inbound": "Inbound",
+        "outbound": "Outbound",
+        "failed": "Failed"
       }
     }
   },
@@ -1202,7 +1223,8 @@
         "estimatedReach": "Estimated Reach",
         "language": "Language",
         "confirmTitle": "Confirm Broadcast",
-        "confirmDesc": "You are about to send this broadcast to <b>{count, number}</b> {count, plural, =1 {contact} other {contacts}} using the <b>{template}</b> template. This action cannot be undone."
+        "confirmDesc": "You are about to send this broadcast to <b>{count, number}</b> {count, plural, =1 {contact} other {contacts}} using the <b>{template}</b> template. This action cannot be undone.",
+        "channel": "Channel"
       }
     },
     "sending": {
@@ -1960,7 +1982,9 @@
         "Marketing": "Marketing",
         "Utility": "Utility",
         "Authentication": "Authentication"
-      }
+      },
+      "allChannels": "All channels",
+      "templateChannel": "Channel"
     },
     "roles": {
       "departmentRoleLabel": "Role in the department",
@@ -2182,7 +2206,21 @@
       "updated": "Channel updated",
       "deleted": "Channel deleted",
       "deleteFailed": "Could not delete the channel",
-      "networkError": "Could not reach the server"
+      "networkError": "Could not reach the server",
+      "test": "Test connection",
+      "testOk": "Channel is healthy",
+      "testFailed": "Channel test failed",
+      "lastChecked": "Last checked",
+      "quality": "Quality",
+      "registered": "Registered",
+      "notRegistered": "Not registered",
+      "pin": "Two-step verification PIN",
+      "pinPlaceholder": "6-digit PIN (optional)",
+      "pinHint": "Required for production numbers that need /register. Test numbers can be saved without it.",
+      "connectWithMeta": "Connect with Meta",
+      "connecting": "Connecting...",
+      "metaCancelled": "Meta signup was cancelled",
+      "metaTimeout": "Meta signup timed out. Try again."
     },
     "sections": {
       "overview": "Overview",
@@ -2198,7 +2236,8 @@
       "organization": "Company structure",
       "members": "Team members",
       "api": "API keys",
-      "channels": "Channels"
+      "channels": "Channels",
+      "health": "Health"
     },
     "groups": {
       "account": "Account",
@@ -2456,6 +2495,27 @@
       "textPlaceholder": "The message text to insert",
       "cancel": "Cancel",
       "save": "Save"
+    },
+    "health": {
+      "title": "Operational health",
+      "description": "Check the status of WhatsApp, AI, cron and the public site URL.",
+      "whatsapp": "WhatsApp",
+      "ai": "AI assistant",
+      "cron": "Cron",
+      "siteUrl": "Site URL",
+      "refresh": "Refresh",
+      "notConfigured": "Not configured",
+      "configured": "Configured",
+      "channelsConnected": "{count} channels connected",
+      "disconnected": "Disconnected",
+      "channels": "Channels",
+      "lastChecked": "Last checked",
+      "neverChecked": "Never checked",
+      "loadFailed": "Could not load health status",
+      "networkError": "Could not reach the server",
+      "unknown": "UNKNOWN",
+      "registered": "registered",
+      "notRegistered": "not registered"
     }
   },
   "SignupPage": {
@@ -3162,7 +3222,13 @@
       "alreadyExists": "A template named {name} ({language}) already exists in this account. Edit or resubmit that template instead of creating a new one.",
       "submitFailed": "Failed to submit template.",
       "metaApiStatus": "Meta API error: {status}",
-      "syncFailed": "Failed to sync templates"
+      "syncFailed": "Failed to sync templates",
+      "channelInvalid": "Channel not found in this account"
+    },
+    "channels": {
+      "invalidPhoneNumberId": "Invalid Phone Number ID",
+      "invalidWabaId": "Invalid WABA ID",
+      "phoneNotInWaba": "Phone Number ID is not listed in that WABA"
     }
   }
 }

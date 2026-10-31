@@ -21,6 +21,7 @@ import { InboxSettings } from '@/components/settings/inbox-settings';
 import { OrganizationPanel } from '@/components/settings/organization-panel';
 import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
+import { HealthPanel } from '@/components/settings/health-panel';
 import {
   resolveSection,
   type SettingsSection,
@@ -86,6 +87,7 @@ function SettingsPageInner() {
     deals: <DealsSettings />,
     organization: <OrganizationPanel />,
     members: <MembersTab />,
+    health: <HealthPanel />,
     api: <ApiKeysSettings />,
   };
 

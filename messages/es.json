@@ -173,7 +173,9 @@
         "newContact": "Nuevo contacto",
         "newDeal": "Nuevo negocio",
         "newBroadcast": "Nueva difusión",
-        "newAutomation": "Nueva automatización"
+        "newAutomation": "Nueva automatización",
+        "allChannels": "Todos los canales",
+        "channelLabel": "Filtrar dashboard por canal"
       },
       "health": {
         "title": "Estado del número de WhatsApp",
@@ -363,6 +365,25 @@
         "hoursOnly": "{value} h",
         "days": "{value} d {remainder} h",
         "daysOnly": "{value} d"
+      }
+    },
+    "channels": {
+      "title": "Rendimiento por canal",
+      "description": "Conversaciones y mensajes por número de WhatsApp en el rango seleccionado.",
+      "manage": "Gestionar canales",
+      "quality": "Calidad",
+      "conversations": "Conversaciones",
+      "open": "Abiertas",
+      "exportCsv": "Exportar CSV",
+      "csv": {
+        "channel": "Canal",
+        "phone": "Teléfono",
+        "quality": "Calidad",
+        "conversations": "Conversaciones",
+        "open": "Abiertas",
+        "inbound": "Entrantes",
+        "outbound": "Salientes",
+        "failed": "Fallidas"
       }
     }
   },
@@ -1202,7 +1223,8 @@
         "estimatedReach": "Alcance estimado",
         "language": "Idioma",
         "confirmTitle": "Confirmar difusión",
-        "confirmDesc": "Estás a punto de enviar esta difusión a <b>{count, number}</b> {count, plural, =1 {contacto} other {contactos}} con la plantilla <b>{template}</b>. Esta acción no se puede deshacer."
+        "confirmDesc": "Estás a punto de enviar esta difusión a <b>{count, number}</b> {count, plural, =1 {contacto} other {contactos}} con la plantilla <b>{template}</b>. Esta acción no se puede deshacer.",
+        "channel": "Canal"
       }
     },
     "sending": {
@@ -1960,7 +1982,9 @@
         "Marketing": "Marketing",
         "Utility": "Utilidad",
         "Authentication": "Autenticación"
-      }
+      },
+      "allChannels": "Todos los canales",
+      "templateChannel": "Canal"
     },
     "roles": {
       "departmentRoleLabel": "Rol en el departamento",
@@ -2182,7 +2206,21 @@
       "updated": "Canal actualizado",
       "deleted": "Canal eliminado",
       "deleteFailed": "No se pudo eliminar el canal",
-      "networkError": "No se pudo conectar con el servidor"
+      "networkError": "No se pudo conectar con el servidor",
+      "test": "Probar conexión",
+      "testOk": "El canal está funcionando",
+      "testFailed": "La prueba del canal falló",
+      "lastChecked": "Última comprobación",
+      "quality": "Calidad",
+      "registered": "Registrado",
+      "notRegistered": "Sin registrar",
+      "pin": "PIN de verificación en dos pasos",
+      "pinPlaceholder": "PIN de 6 dígitos (opcional)",
+      "pinHint": "Necesario para números de producción que requieren /register. Los números de prueba pueden guardarse sin PIN.",
+      "connectWithMeta": "Conectar con Meta",
+      "connecting": "Conectando...",
+      "metaCancelled": "El registro con Meta fue cancelado",
+      "metaTimeout": "El registro con Meta agotó el tiempo. Inténtalo de nuevo."
     },
     "sections": {
       "overview": "Resumen",
@@ -2198,7 +2236,8 @@
       "organization": "Estructura de la empresa",
       "members": "Miembros del equipo",
       "api": "Claves de API",
-      "channels": "Canales"
+      "channels": "Canales",
+      "health": "Salud"
     },
     "groups": {
       "account": "Cuenta",
@@ -2456,6 +2495,27 @@
       "textPlaceholder": "El texto del mensaje que se insertará",
       "cancel": "Cancelar",
       "save": "Guardar"
+    },
+    "health": {
+      "title": "Salud operativa",
+      "description": "Revisa el estado de WhatsApp, IA, cron y la URL pública.",
+      "whatsapp": "WhatsApp",
+      "ai": "Asistente de IA",
+      "cron": "Cron",
+      "siteUrl": "URL del sitio",
+      "refresh": "Actualizar",
+      "notConfigured": "Sin configurar",
+      "configured": "Configurado",
+      "channelsConnected": "{count} canales conectados",
+      "disconnected": "Desconectado",
+      "channels": "Canales",
+      "lastChecked": "Última comprobación",
+      "neverChecked": "Nunca comprobado",
+      "loadFailed": "No se pudo cargar el estado",
+      "networkError": "No se pudo conectar con el servidor",
+      "unknown": "DESCONOCIDO",
+      "registered": "registrado",
+      "notRegistered": "sin registrar"
     }
   },
   "SignupPage": {
@@ -3162,7 +3222,13 @@
       "alreadyExists": "Ya existe una plantilla llamada {name} ({language}) en esta cuenta. Edita o vuelve a enviar esa plantilla en lugar de crear una nueva.",
       "submitFailed": "Error al enviar la plantilla.",
       "metaApiStatus": "Error de la API de Meta: {status}",
-      "syncFailed": "Error al sincronizar las plantillas"
+      "syncFailed": "Error al sincronizar las plantillas",
+      "channelInvalid": "El canal no pertenece a esta cuenta"
+    },
+    "channels": {
+      "invalidPhoneNumberId": "Phone Number ID inválido",
+      "invalidWabaId": "WABA ID inválido",
+      "phoneNotInWaba": "El Phone Number ID no pertenece a esa WABA"
     }
   }
 }

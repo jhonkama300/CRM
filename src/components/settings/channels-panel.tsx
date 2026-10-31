@@ -6,8 +6,9 @@ import { useCan } from "@/hooks/use-can";
 import type { Channel, Department } from "@/types";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
-import { Loader2, MessageCircle, Pencil, Plus, Star, Trash2 } from "lucide-react";
+import { Loader2, MessageCircle, Pencil, Plus, RefreshCw, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EmbeddedSignupButton } from "@/components/settings/embedded-signup-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -33,6 +34,7 @@ interface ChannelDraft {
   waba_id: string;
   access_token: string;
   verify_token: string;
+  pin: string;
   department_id: string | null;
 }
 
@@ -43,6 +45,7 @@ const EMPTY: ChannelDraft = {
   waba_id: "",
   access_token: "",
   verify_token: "",
+  pin: "",
   department_id: null,
 };
 
@@ -59,6 +62,7 @@ export function ChannelsPanel() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Channel | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [testingId, setTestingId] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -92,6 +96,7 @@ export function ChannelsPanel() {
       waba_id: channel.waba_id ?? "",
       access_token: "",
       verify_token: "",
+      pin: "",
       department_id: channel.department_id,
     });
     setDialogOpen(true);
@@ -116,6 +121,7 @@ export function ChannelsPanel() {
         verify_token: draft.verify_token.trim() || null,
       };
       if (draft.access_token.trim()) body.access_token = draft.access_token.trim();
+      if (draft.pin.trim()) body.pin = draft.pin.trim();
       if (!editing) body.phone_number_id = draft.phone_number_id.trim();
 
       const res = await fetch(
@@ -129,6 +135,7 @@ export function ChannelsPanel() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         toast.error(data?.error ?? t("saveFailed"));
+        await fetchData();
         return;
       }
       toast.success(editing ? t("updated") : t("created"));
@@ -138,6 +145,26 @@ export function ChannelsPanel() {
       toast.error(t("networkError"));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const testChannel = async (channel: Channel) => {
+    setTestingId(channel.id);
+    try {
+      const res = await fetch(`/api/channels/${channel.id}/test`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.error ?? t("testFailed"));
+      } else {
+        toast.success(t("testOk"));
+      }
+      await fetchData();
+    } catch {
+      toast.error(t("networkError"));
+    } finally {
+      setTestingId(null);
     }
   };
 
@@ -171,10 +198,13 @@ export function ChannelsPanel() {
           </p>
         </div>
         {canEdit && (
-          <Button onClick={openCreate} className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            {t("addChannel")}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <EmbeddedSignupButton onConnected={() => void fetchData()} />
+            <Button onClick={openCreate} className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              {t("addChannel")}
+            </Button>
+          </div>
         )}
       </div>
 
@@ -227,15 +257,71 @@ export function ChannelsPanel() {
                       )}
                     </div>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {channel.phone_number_id}
+                      {channel.display_phone_number || channel.phone_number_id}
                       {department ? ` · ${department.name}` : ""}
                     </p>
                     <p className="mt-1 text-[11px] text-muted-foreground">
-                      WABA: {channel.waba_id || "—"} · {channel.status}
+                      WABA: {channel.waba_id || "-"} · {channel.status}
                     </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide ${
+                          channel.quality_rating === "GREEN"
+                            ? "bg-emerald-500/10 text-emerald-500"
+                            : channel.quality_rating === "YELLOW"
+                              ? "bg-amber-500/10 text-amber-500"
+                              : channel.quality_rating === "RED"
+                                ? "bg-red-500/10 text-red-500"
+                                : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {t("quality")}: {channel.quality_rating || "UNKNOWN"}
+                      </span>
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide ${
+                          channel.registered_at
+                            ? "bg-emerald-500/10 text-emerald-500"
+                            : "bg-amber-500/10 text-amber-500"
+                        }`}
+                      >
+                        {channel.registered_at
+                          ? t("registered")
+                          : t("notRegistered")}
+                      </span>
+                      {channel.messaging_limit && (
+                        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+                          {channel.messaging_limit}
+                        </span>
+                      )}
+                    </div>
+                    {channel.last_registration_error ? (
+                      <p className="mt-1 line-clamp-2 text-[10px] text-amber-400">
+                        {channel.last_registration_error}
+                      </p>
+                    ) : channel.last_error ? (
+                      <p className="mt-1 line-clamp-2 text-[10px] text-red-400">
+                        {channel.last_error}
+                      </p>
+                    ) : channel.last_checked_at ? (
+                      <p className="mt-1 text-[10px] text-muted-foreground">
+                        {t("lastChecked")}:{" "}
+                        {new Date(channel.last_checked_at).toLocaleString()}
+                      </p>
+                    ) : null}
                   </div>
                   {canEdit && (
                     <div className="flex shrink-0 gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => void testChannel(channel)}
+                        disabled={testingId === channel.id}
+                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                        title={t("test")}
+                      >
+                        <RefreshCw
+                          className={`h-3.5 w-3.5 ${testingId === channel.id ? "animate-spin" : ""}`}
+                        />
+                      </button>
                       <button
                         type="button"
                         onClick={() => openEdit(channel)}
@@ -345,6 +431,26 @@ export function ChannelsPanel() {
                 }
                 className="bg-muted border-border text-foreground"
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("pin")}</Label>
+              <Input
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                value={draft.pin}
+                onChange={(e) =>
+                  setDraft((d) => ({
+                    ...d,
+                    pin: e.target.value.replace(/\D/g, "").slice(0, 6),
+                  }))
+                }
+                className="bg-muted border-border text-foreground"
+                placeholder={t("pinPlaceholder")}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                {t("pinHint")}
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>{t("color")}</Label>

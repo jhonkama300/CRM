@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
-import { encrypt } from '@/lib/whatsapp/encryption';
+import { decrypt, encrypt } from '@/lib/whatsapp/encryption';
+import { validateChannelCredentials } from '@/lib/whatsapp/channel-validation';
+import { registerPhoneNumber } from '@/lib/whatsapp/meta-api';
+import { explainMetaError } from '@/lib/whatsapp/meta-error-explain';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -14,6 +17,14 @@ export async function PATCH(request: Request, { params }: Params) {
     const { id } = await params;
     const body = await request.json().catch(() => null);
     if (!body) return bad('Invalid request body');
+
+    const { data: existing } = await supabase
+      .from('channels')
+      .select('id, phone_number_id, waba_id, access_token, registered_at')
+      .eq('id', id)
+      .eq('account_id', accountId)
+      .maybeSingle();
+    if (!existing) return bad('Channel not found', 404);
 
     const patch: Record<string, unknown> = {};
     if ('name' in body) {
@@ -60,6 +71,76 @@ export async function PATCH(request: Request, { params }: Params) {
       patch.mirror_inbound_media = body.mirror_inbound_media;
     }
 
+    const pin = typeof body.pin === 'string' ? body.pin.trim() : '';
+    if (pin && !/^\d{6}$/.test(pin)) {
+      return bad('Two-step verification PIN must be 6 digits');
+    }
+
+    const changedCredentials =
+      'access_token' in body || 'waba_id' in body;
+    if (changedCredentials) {
+      const nextWaba =
+        'waba_id' in body
+          ? (typeof body.waba_id === 'string' && body.waba_id.trim()
+              ? body.waba_id.trim()
+              : null)
+          : (existing.waba_id ?? null);
+      const plainToken =
+        typeof body.access_token === 'string' && body.access_token.trim()
+          ? body.access_token.trim()
+          : decrypt(existing.access_token);
+      try {
+        const validation = await validateChannelCredentials({
+          phoneNumberId: existing.phone_number_id,
+          wabaId: nextWaba,
+          accessToken: plainToken,
+        });
+        patch.display_phone_number = validation.displayPhoneNumber;
+        patch.subscribed_at = nextWaba ? new Date().toISOString() : null;
+      } catch (err) {
+        return bad(
+          err instanceof Error ? err.message : 'Could not validate the channel with Meta',
+          400,
+        );
+      }
+      patch.status = 'connected';
+      patch.last_checked_at = new Date().toISOString();
+      patch.last_error = null;
+    }
+
+    let registrationError: string | null = null;
+    if (pin) {
+      const plainToken =
+        typeof body.access_token === 'string' && body.access_token.trim()
+          ? body.access_token.trim()
+          : decrypt(existing.access_token);
+      const wabaId =
+        'waba_id' in body
+          ? (typeof body.waba_id === 'string' && body.waba_id.trim()
+              ? body.waba_id.trim()
+              : null)
+          : (existing.waba_id ?? null);
+      try {
+        await registerPhoneNumber({
+          phoneNumberId: existing.phone_number_id,
+          accessToken: plainToken,
+          pin,
+        });
+        patch.registered_at = new Date().toISOString();
+        patch.last_registration_error = null;
+        patch.status = 'connected';
+      } catch (err) {
+        const explained = explainMetaError(err, 'register', {
+          phoneNumberId: existing.phone_number_id,
+          wabaId,
+        });
+        registrationError = explained.summary;
+        patch.registered_at = null;
+        patch.last_registration_error = registrationError;
+        patch.status = 'disconnected';
+      }
+    }
+
     if (Object.keys(patch).length === 0) return bad('Nothing to update');
 
     const { data, error } = await supabase
@@ -67,10 +148,16 @@ export async function PATCH(request: Request, { params }: Params) {
       .update(patch)
       .eq('id', id)
       .eq('account_id', accountId)
-      .select('id, name, color, phone_number_id, waba_id, status, department_id, updated_at')
+      .select('id, name, color, phone_number_id, waba_id, status, department_id, display_phone_number, quality_rating, messaging_limit, registered_at, last_registration_error, subscribed_at, last_checked_at, last_error, updated_at')
       .maybeSingle();
     if (error) return bad(error.message, 500);
     if (!data) return bad('Channel not found', 404);
+    if (registrationError) {
+      return NextResponse.json(
+        { channel: data, error: registrationError },
+        { status: 400 },
+      );
+    }
     return NextResponse.json({ channel: data });
   } catch (err) {
     return toErrorResponse(err);

@@ -50,6 +50,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type {
+  Channel,
   MessageTemplate,
   TemplateButton,
   TemplateSampleValues,
@@ -72,6 +73,7 @@ const categoryColors: Record<string, string> = {
 
 interface TemplateFormData {
   name: string;
+  channel_id: string | null;
   category: MessageTemplate['category'];
   language: string;
   header_format: HeaderFormat;
@@ -86,6 +88,7 @@ interface TemplateFormData {
 
 const emptyForm: TemplateFormData = {
   name: '',
+  channel_id: null,
   category: 'Marketing',
   language: 'en_US',
   header_format: 'none',
@@ -141,6 +144,8 @@ export function TemplateManager() {
 
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [channelFilter, setChannelFilter] = useState<string>('__all__');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -198,6 +203,10 @@ export function TemplateManager() {
       return;
     }
     fetchTemplates(accountId);
+    fetch('/api/channels', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : { channels: [] }))
+      .then((data) => setChannels((data.channels ?? []) as Channel[]))
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id, accountId]);
 
@@ -224,6 +233,7 @@ export function TemplateManager() {
 
     return {
       name: form.name.trim(),
+      channel_id: form.channel_id,
       category: form.category,
       language: form.language.trim() || 'en_US',
       header_type: form.header_format === 'none' ? undefined : form.header_format,
@@ -245,6 +255,7 @@ export function TemplateManager() {
     setEditingId(template.id);
     setForm({
       name: template.name,
+      channel_id: template.channel_id ?? null,
       category: template.category,
       language: template.language || 'en_US',
       header_format: (template.header_type ?? 'none') as HeaderFormat,
@@ -261,7 +272,13 @@ export function TemplateManager() {
 
   function openCreate() {
     setEditingId(null);
-    setForm(emptyForm);
+    setForm({
+      ...emptyForm,
+      channel_id:
+        channelFilter !== '__all__'
+          ? channelFilter
+          : (channels[0]?.id ?? null),
+    });
     setDialogOpen(true);
   }
 
@@ -519,13 +536,36 @@ export function TemplateManager() {
     }
   }
 
+  const visibleTemplates =
+    channelFilter === '__all__'
+      ? templates
+      : templates.filter((template) => template.channel_id === channelFilter);
+
   return (
     <section className="animate-in fade-in-50 space-y-4 duration-200">
       <SettingsPanelHead
         title={t('title')}
         description={t('description')}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {channels.length > 0 && (
+              <Select
+                value={channelFilter}
+                onValueChange={(value) => setChannelFilter(value ?? '__all__')}
+              >
+                <SelectTrigger className="w-44 bg-muted border-border text-foreground">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">{t('allChannels')}</SelectItem>
+                  {channels.map((channel) => (
+                    <SelectItem key={channel.id} value={channel.id}>
+                      {channel.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Button
               variant="outline"
               onClick={handleSyncFromMeta}
@@ -543,7 +583,7 @@ export function TemplateManager() {
         }
       />
 
-      {templates.length === 0 ? (
+      {visibleTemplates.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <p className="text-muted-foreground text-sm">{t('noTemplates')}</p>
@@ -554,9 +594,10 @@ export function TemplateManager() {
         </Card>
       ) : (
         <div className="grid gap-3 xl:grid-cols-2">
-          {templates.map((template) => {
+          {visibleTemplates.map((template) => {
             const statusKey = template.status || 'DRAFT';
             const status = templateStatusConfig[statusKey];
+            const channel = channels.find((c) => c.id === template.channel_id);
             return (
               <Card key={template.id}>
                 <CardContent className="flex items-start justify-between pt-4">
@@ -574,6 +615,15 @@ export function TemplateManager() {
                       {template.language && (
                         <span className="text-xs text-muted-foreground uppercase">
                           {template.language}
+                        </span>
+                      )}
+                      {channel && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                          <span
+                            className="h-1.5 w-1.5 rounded-full"
+                            style={{ backgroundColor: channel.color }}
+                          />
+                          {channel.name}
                         </span>
                       )}
                       {template.quality_score && (
@@ -696,6 +746,32 @@ export function TemplateManager() {
           )}
 
           <div className="space-y-4 py-2">
+            {channels.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">
+                  {t('templateChannel')}
+                </Label>
+                <Select
+                  value={form.channel_id ?? channels[0]?.id ?? ''}
+                  onValueChange={(value) =>
+                    setForm({ ...form, channel_id: value ?? null })
+                  }
+                  disabled={editingId !== null}
+                >
+                  <SelectTrigger className="w-full bg-muted border-border text-foreground">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover border-border">
+                    {channels.map((channel) => (
+                      <SelectItem key={channel.id} value={channel.id}>
+                        {channel.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label className="text-muted-foreground">{t('templateName')}</Label>
               <Input

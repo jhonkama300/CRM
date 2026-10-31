@@ -248,7 +248,7 @@ export interface Conversation {
 // Notifications (migration 027)
 // ============================================================
 
-export type NotificationType = 'conversation_assigned';
+export type NotificationType = 'conversation_assigned' | 'channel_health';
 
 export interface Notification {
   id: string;
@@ -258,6 +258,7 @@ export interface Notification {
   type: NotificationType;
   conversation_id?: string;
   contact_id?: string;
+  channel_id?: string;
   /** Who triggered it. Null when an automation/system assigned it. */
   actor_user_id?: string;
   title: string;
@@ -357,6 +358,14 @@ export interface Channel {
   access_token: string;
   verify_token: string | null;
   status: 'connected' | 'disconnected';
+  display_phone_number?: string | null;
+  quality_rating?: 'GREEN' | 'YELLOW' | 'RED' | 'UNKNOWN' | string | null;
+  messaging_limit?: string | null;
+  registered_at?: string | null;
+  last_registration_error?: string | null;
+  subscribed_at?: string | null;
+  last_checked_at?: string | null;
+  last_error?: string | null;
   mirror_inbound_media: boolean;
   created_at: string;
   updated_at: string;
@@ -418,6 +427,7 @@ export interface TemplateSampleValues {
 export interface MessageTemplate {
   id: string;
   user_id: string;
+  channel_id?: string | null;
   name: string;
   category: 'Marketing' | 'Utility' | 'Authentication';
   language?: string;

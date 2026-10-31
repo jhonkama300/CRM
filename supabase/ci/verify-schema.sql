@@ -242,6 +242,72 @@ BEGIN
     RAISE EXCEPTION 'public.can_access_channel(uuid) is missing - migration 067 did not apply';
   END IF;
 
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'channels'
+      AND column_name = 'last_checked_at'
+  ) THEN
+    RAISE EXCEPTION 'channels.last_checked_at is missing - migration 068 did not apply';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'message_templates'
+      AND column_name = 'channel_id'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'broadcasts'
+      AND column_name = 'channel_id'
+  ) THEN
+    RAISE EXCEPTION 'message_templates/broadcasts.channel_id are missing - migration 069 did not apply';
+  END IF;
+
+  IF (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'channels'
+      AND column_name IN (
+        'display_phone_number', 'quality_rating', 'messaging_limit',
+        'registered_at', 'last_registration_error', 'subscribed_at'
+      )
+  ) <> 6 THEN
+    RAISE EXCEPTION
+      'channel registration/health columns are missing - migration 070 did not apply';
+  END IF;
+  IF to_regprocedure('public.channel_performance(integer)') IS NULL THEN
+    RAISE EXCEPTION 'public.channel_performance(integer) is missing - migration 070 did not apply';
+  END IF;
+  IF has_function_privilege('anon', 'public.channel_performance(integer)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'anon can execute channel_performance - migration 070 grants are wrong';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'notifications'
+      AND column_name = 'channel_id'
+  ) OR pg_get_constraintdef(
+       (SELECT oid FROM pg_constraint
+        WHERE conname = 'notifications_type_check')
+     ) NOT LIKE '%channel_health%' THEN
+    RAISE EXCEPTION
+      'notifications channel health support is missing - migration 071 did not apply';
+  END IF;
+
+  IF to_regprocedure('public.dashboard_overview(integer,text,uuid)') IS NULL THEN
+    RAISE EXCEPTION
+      'public.dashboard_overview(integer, text, uuid) is missing - migration 072 did not apply';
+  END IF;
+  IF has_function_privilege(
+       'anon', 'public.dashboard_overview(integer,text,uuid)', 'EXECUTE'
+     ) THEN
+    RAISE EXCEPTION
+      'anon can execute dashboard_overview(integer,text,uuid) - migration 072 grants are wrong';
+  END IF;
+
+  IF pg_get_functiondef('public.redeem_invitation(text)'::regprocedure)
+       NOT LIKE '%FROM channels WHERE account_id = v_old_account_id%' THEN
+    RAISE EXCEPTION
+      'redeem_invitation does not guard channel data - migration 073 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

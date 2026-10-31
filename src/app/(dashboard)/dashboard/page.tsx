@@ -23,6 +23,7 @@ import { derivePresence } from '@/lib/presence'
 import { ActivityFeed } from '@/components/dashboard/activity-feed'
 import { AttentionRow } from '@/components/dashboard/attention-row'
 import { CampaignsCard } from '@/components/dashboard/campaigns-card'
+import { ChannelPerformanceCard } from '@/components/dashboard/channel-performance-card'
 import { KpiRow } from '@/components/dashboard/kpi-row'
 import { MessageVolumeCard } from '@/components/dashboard/message-volume-card'
 import { OverviewHeader } from '@/components/dashboard/overview-header'
@@ -47,8 +48,10 @@ function DashboardPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const range = parseOverviewRange(searchParams.get('range'))
+  const channelId = searchParams.get('channel')
   const { defaultCurrency, profile } = useAuth()
 
+  const [channels, setChannels] = useState<Array<{ id: string; name: string; color: string }>>([])
   const [overview, setOverview] = useState<DashboardOverview | null>(null)
   const [failed, setFailed] = useState(false)
   const [activity, setActivity] = useState<ActivityItem[] | null>(null)
@@ -59,7 +62,7 @@ function DashboardPageInner() {
 
   const refresh = useCallback((days: OverviewRange) => {
     const request = ++requestRef.current
-    loadOverview(createClient(), days, browserTimeZone())
+    loadOverview(createClient(), days, browserTimeZone(), channelId)
       .then((data) => {
         if (request !== requestRef.current) return
         setOverview(data)
@@ -71,18 +74,28 @@ function DashboardPageInner() {
         console.error('[dashboard] overview failed:', err)
         setFailed(true)
       })
-  }, [])
+  }, [channelId])
 
   useEffect(() => {
     refresh(range)
   }, [range, refresh])
 
   useEffect(() => {
-    loadActivity(createClient(), 50)
+    void (async () => {
+      const { data } = await createClient()
+        .from('channels')
+        .select('id, name, color')
+        .order('created_at', { ascending: true })
+      setChannels(data ?? [])
+    })()
+  }, [])
+
+  useEffect(() => {
+    loadActivity(createClient(), 50, channelId)
       .then(setActivity)
       .catch((err) => console.error('[dashboard] activity failed:', err))
       .finally(() => setActivityLoading(false))
-  }, [])
+  }, [channelId])
 
   useEffect(() => {
     const tick = window.setInterval(() => {
@@ -120,7 +133,22 @@ function DashboardPageInner() {
     [router, searchParams],
   )
 
-  const data = overview?.days === range ? overview : null
+  const handleChannelChange = useCallback(
+    (next: string | null) => {
+      const params = new URLSearchParams(searchParams.toString())
+      if (next) params.set('channel', next)
+      else params.delete('channel')
+      setFailed(false)
+      router.replace(`/dashboard?${params.toString()}`, { scroll: false })
+    },
+    [router, searchParams],
+  )
+
+  const data =
+    overview?.days === range &&
+    (overview?.channelId ?? null) === (channelId ?? null)
+      ? overview
+      : null
 
   const onlineCount = useMemo(
     () =>
@@ -149,6 +177,9 @@ function DashboardPageInner() {
         name={profile?.full_name ?? null}
         range={range}
         onRangeChange={handleRangeChange}
+        channels={channels}
+        channelId={channelId}
+        onChannelChange={handleChannelChange}
       />
 
       {data && needsSetup(data.setup) ? (
@@ -162,6 +193,8 @@ function DashboardPageInner() {
             <MessageVolumeCard data={data} />
             <ReplyQueueCard data={data} now={now} />
           </div>
+
+          <ChannelPerformanceCard days={range} channelId={channelId} />
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
             <PipelineCard data={data} currency={defaultCurrency} />

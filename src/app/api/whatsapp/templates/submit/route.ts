@@ -27,6 +27,7 @@ function buildTemplateRow(
     status: 'DRAFT' | string
     metaTemplateId: string | null
     submissionError: string | null
+    channelId: string | null
   },
 ) {
   return {
@@ -34,6 +35,7 @@ function buildTemplateRow(
     // of migration 017. Without this an INSERT throws on the
     // not-null constraint.
     account_id: accountId,
+    channel_id: extras.channelId,
     name: payload.name,
     category: payload.category,
     language: payload.language,
@@ -69,14 +71,16 @@ async function findExistingTemplate(
   supabase: SupabaseClient,
   accountId: string,
   payload: TemplatePayload,
+  channelId: string | null,
 ) {
-  return supabase
+  let query = supabase
     .from('message_templates')
     .select('id, status, meta_template_id')
     .eq('account_id', accountId)
     .eq('name', payload.name)
     .eq('language', payload.language)
-    .maybeSingle<ExistingTemplate>()
+  if (channelId) query = query.eq('channel_id', channelId)
+  return query.maybeSingle<ExistingTemplate>()
 }
 
 async function saveTemplateRow(
@@ -130,12 +134,41 @@ export async function POST(request: Request) {
     const limit = checkRateLimit(`whatsapp-admin:${userId}`, RATE_LIMITS.whatsappAdmin)
     if (!limit.success) return rateLimitResponse(limit)
 
-    let payload: TemplatePayload
+    let body: TemplatePayload & { channel_id?: unknown }
     try {
-      payload = (await request.json()) as TemplatePayload
+      body = (await request.json()) as TemplatePayload & { channel_id?: unknown }
     } catch {
       return NextResponse.json({ error: t('templates.invalidJsonBody') }, { status: 400 })
     }
+    const payload = body
+    const requestedChannelId =
+      typeof body.channel_id === 'string' && body.channel_id.trim()
+        ? body.channel_id.trim()
+        : null
+
+    let channel: { id: string; waba_id: string | null; access_token: string } | null = null
+    if (requestedChannelId) {
+      const { data } = await supabase
+        .from('channels')
+        .select('id, waba_id, access_token')
+        .eq('id', requestedChannelId)
+        .eq('account_id', accountId)
+        .maybeSingle()
+      channel = data
+      if (!channel) {
+        return NextResponse.json({ error: t('templates.channelInvalid') }, { status: 400 })
+      }
+    } else {
+      const { data } = await supabase
+        .from('channels')
+        .select('id, waba_id, access_token')
+        .eq('account_id', accountId)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      channel = data
+    }
+    const resolvedChannelId = channel?.id ?? null
 
     if (payload.category === 'Authentication') {
       return NextResponse.json(
@@ -160,6 +193,7 @@ export async function POST(request: Request) {
       supabase,
       accountId,
       payload,
+      resolvedChannelId,
     )
     if (existingErr) {
       return NextResponse.json({ error: t('templates.submitFailed') }, { status: 500 })
@@ -188,12 +222,7 @@ export async function POST(request: Request) {
       metaTemplateId = `dry-run-${crypto.randomUUID()}`
       metaStatus = 'PENDING'
     } else {
-      const { data: config, error: configError } = await supabase
-        .from('whatsapp_config')
-        .select('*')
-        .eq('account_id', accountId)
-        .single()
-      if (configError || !config) {
+      if (!channel) {
         return NextResponse.json(
           {
             error:
@@ -202,7 +231,7 @@ export async function POST(request: Request) {
           { status: 400 },
         )
       }
-      if (!config.waba_id) {
+      if (!channel.waba_id) {
         return NextResponse.json(
           {
             error:
@@ -212,7 +241,7 @@ export async function POST(request: Request) {
         )
       }
 
-      const accessToken = decrypt(config.access_token)
+      const accessToken = decrypt(channel.access_token)
 
       // Media headers (image/video/document) need a Resumable-Upload
       // handle (Meta rejects a plain URL at creation). Derive it from
@@ -231,7 +260,7 @@ export async function POST(request: Request) {
       const metaPayload = buildMetaTemplatePayload(payload)
       try {
         const meta = await submitMessageTemplate({
-          wabaId: config.waba_id,
+          wabaId: channel.waba_id,
           accessToken,
           payload: metaPayload,
         })
@@ -249,6 +278,7 @@ export async function POST(request: Request) {
             status: 'DRAFT',
             metaTemplateId: null,
             submissionError: message,
+            channelId: resolvedChannelId,
           }),
         )
         const isRateLimit = /\b429\b/.test(message)
@@ -271,6 +301,7 @@ export async function POST(request: Request) {
         status: normalizeStatus(metaStatus),
         metaTemplateId,
         submissionError: null,
+        channelId: resolvedChannelId,
       }),
     )
 

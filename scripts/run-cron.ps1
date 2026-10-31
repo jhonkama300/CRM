@@ -23,7 +23,8 @@ if (-not $secret) {
 $headers = @{ "x-cron-secret" = $secret }
 $endpoints = @(
   "/api/automations/cron",
-  "/api/flows/cron"
+  "/api/flows/cron",
+  "/api/channels/cron"
 )
 
 foreach ($endpoint in $endpoints) {

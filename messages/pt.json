@@ -173,7 +173,9 @@
         "newContact": "Novo contato",
         "newDeal": "Novo negócio",
         "newBroadcast": "Novo disparo",
-        "newAutomation": "Nova automação"
+        "newAutomation": "Nova automação",
+        "allChannels": "Todos os canais",
+        "channelLabel": "Filtrar painel por canal"
       },
       "health": {
         "title": "Saúde do número do WhatsApp",
@@ -363,6 +365,25 @@
         "hoursOnly": "{value} h",
         "days": "{value} d {remainder} h",
         "daysOnly": "{value} d"
+      }
+    },
+    "channels": {
+      "title": "Desempenho por canal",
+      "description": "Conversas e mensagens por número de WhatsApp no período selecionado.",
+      "manage": "Gerenciar canais",
+      "quality": "Qualidade",
+      "conversations": "Conversas",
+      "open": "Abertas",
+      "exportCsv": "Exportar CSV",
+      "csv": {
+        "channel": "Canal",
+        "phone": "Telefone",
+        "quality": "Qualidade",
+        "conversations": "Conversas",
+        "open": "Abertas",
+        "inbound": "Recebidas",
+        "outbound": "Enviadas",
+        "failed": "Falhas"
       }
     }
   },
@@ -1202,7 +1223,8 @@
         "estimatedReach": "Alcance estimado",
         "language": "Idioma",
         "confirmTitle": "Confirmar disparo",
-        "confirmDesc": "Você está prestes a enviar este disparo para <b>{count, number}</b> {count, plural, =1 {contato} other {contatos}} usando o modelo <b>{template}</b>. Esta ação não pode ser desfeita."
+        "confirmDesc": "Você está prestes a enviar este disparo para <b>{count, number}</b> {count, plural, =1 {contato} other {contatos}} usando o modelo <b>{template}</b>. Esta ação não pode ser desfeita.",
+        "channel": "Canal"
       }
     },
     "sending": {
@@ -1960,7 +1982,9 @@
         "Marketing": "Marketing",
         "Utility": "Utilidade",
         "Authentication": "Autenticação"
-      }
+      },
+      "allChannels": "Todos os canais",
+      "templateChannel": "Canal"
     },
     "roles": {
       "departmentRoleLabel": "Papel no departamento",
@@ -2182,7 +2206,21 @@
       "updated": "Canal atualizado",
       "deleted": "Canal excluído",
       "deleteFailed": "Não foi possível excluir o canal",
-      "networkError": "Não foi possível conectar ao servidor"
+      "networkError": "Não foi possível conectar ao servidor",
+      "test": "Testar conexão",
+      "testOk": "O canal está saudável",
+      "testFailed": "O teste do canal falhou",
+      "lastChecked": "Última verificação",
+      "quality": "Qualidade",
+      "registered": "Registrado",
+      "notRegistered": "Não registrado",
+      "pin": "PIN de verificação em duas etapas",
+      "pinPlaceholder": "PIN de 6 dígitos (opcional)",
+      "pinHint": "Necessário para números de produção que exigem /register. Números de teste podem ser salvos sem PIN.",
+      "connectWithMeta": "Conectar com a Meta",
+      "connecting": "Conectando...",
+      "metaCancelled": "O cadastro com a Meta foi cancelado",
+      "metaTimeout": "O cadastro com a Meta expirou. Tente novamente."
     },
     "sections": {
       "overview": "Visão geral",
@@ -2198,7 +2236,8 @@
       "organization": "Estrutura da empresa",
       "members": "Membros da equipe",
       "api": "Chaves de API",
-      "channels": "Canais"
+      "channels": "Canais",
+      "health": "Saúde"
     },
     "groups": {
       "account": "Conta",
@@ -2456,6 +2495,27 @@
       "textPlaceholder": "O texto da mensagem a inserir",
       "cancel": "Cancelar",
       "save": "Salvar"
+    },
+    "health": {
+      "title": "Saúde operacional",
+      "description": "Verifique o status do WhatsApp, IA, cron e URL pública.",
+      "whatsapp": "WhatsApp",
+      "ai": "Assistente de IA",
+      "cron": "Cron",
+      "siteUrl": "URL do site",
+      "refresh": "Atualizar",
+      "notConfigured": "Não configurado",
+      "configured": "Configurado",
+      "channelsConnected": "{count} canais conectados",
+      "disconnected": "Desconectado",
+      "channels": "Canais",
+      "lastChecked": "Última verificação",
+      "neverChecked": "Nunca verificado",
+      "loadFailed": "Não foi possível carregar o status",
+      "networkError": "Não foi possível conectar ao servidor",
+      "unknown": "DESCONHECIDO",
+      "registered": "registrado",
+      "notRegistered": "não registrado"
     }
   },
   "SignupPage": {
@@ -3162,7 +3222,13 @@
       "alreadyExists": "Já existe um modelo chamado {name} ({language}) nesta conta. Edite ou reenvie esse modelo em vez de criar um novo.",
       "submitFailed": "Falha ao enviar o modelo.",
       "metaApiStatus": "Erro da API da Meta: {status}",
-      "syncFailed": "Falha ao sincronizar os modelos"
+      "syncFailed": "Falha ao sincronizar os modelos",
+      "channelInvalid": "Canal não encontrado nesta conta"
+    },
+    "channels": {
+      "invalidPhoneNumberId": "Phone Number ID inválido",
+      "invalidWabaId": "WABA ID inválido",
+      "phoneNotInWaba": "O Phone Number ID não pertence a essa WABA"
     }
   }
 }

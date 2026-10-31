@@ -13,6 +13,13 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   OVERVIEW_RANGES,
   minutesBetween,
   needsSetup,
@@ -43,12 +50,18 @@ export function OverviewHeader({
   name,
   range,
   onRangeChange,
+  channels,
+  channelId,
+  onChannelChange,
 }: {
   data: DashboardOverview | null
   now: number
   name: string | null
   range: OverviewRange
   onRangeChange: (range: OverviewRange) => void
+  channels: Array<{ id: string; name: string; color: string }>
+  channelId: string | null
+  onChannelChange: (channelId: string | null) => void
 }) {
   const t = useTranslations('Dashboard.overview.header')
   const router = useRouter()
@@ -88,6 +101,27 @@ export function OverviewHeader({
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <WhatsAppHealthChip />
+        <Select
+          value={channelId ?? '__all__'}
+          onValueChange={(value) =>
+            onChannelChange(!value || value === '__all__' ? null : value)
+          }
+        >
+          <SelectTrigger
+            className="h-8 w-[170px] bg-card text-xs"
+            aria-label={t('channelLabel')}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">{t('allChannels')}</SelectItem>
+            {channels.map((channel) => (
+              <SelectItem key={channel.id} value={channel.id}>
+                {channel.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Tabs value={String(range)} onValueChange={(v) => onRangeChange(Number(v) as OverviewRange)}>
           <TabsList aria-label={t('rangeLabel')}>
             {OVERVIEW_RANGES.map((r) => (
