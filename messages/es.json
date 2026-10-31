@@ -443,7 +443,17 @@
       "channel": "Canal",
       "allChannels": "Todos los canales",
       "department": "Departamento",
-      "allDepartments": "Todos los departamentos"
+      "allDepartments": "Todos los departamentos",
+      "deleteConversation": "Eliminar chat",
+      "deleteSelected": "Eliminar chats seleccionados",
+      "deleteConfirmTitle": "¿Eliminar chat?",
+      "deleteConfirmDesc": "Esto elimina permanentemente el chat con {name} y todos sus mensajes. El contacto se conserva.",
+      "deleteConfirmBulkDesc": "¿Eliminar permanentemente {count} chats y todos sus mensajes? Los contactos se conservan.",
+      "delete": "Eliminar",
+      "deleting": "Eliminando...",
+      "deleted": "Chat eliminado",
+      "deleteFailed": "No se pudo eliminar el chat",
+      "cancel": "Cancelar"
     },
     "messageThread": {
       "backToConversations": "Volver a las conversaciones",

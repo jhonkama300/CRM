@@ -23,6 +23,34 @@ function isoOrNull(value: unknown): string | null | undefined {
  * Lightweight per-conversation controls: pin, snooze, follow-up and
  * assignment. Bulk operations live in /api/inbox/bulk.
  */
+export async function DELETE(_request: Request, { params }: Params) {
+  try {
+    const { supabase, accountId } = await requireRole("admin");
+    const { id } = await params;
+
+    const { data, error } = await supabase
+      .from("conversations")
+      .delete()
+      .eq("id", id)
+      .eq("account_id", accountId)
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    if (!data) {
+      return NextResponse.json(
+        { error: "Conversation not found" },
+        { status: 404 },
+      );
+    }
+    return NextResponse.json({ deleted: true, id: data.id });
+  } catch (err) {
+    return toErrorResponse(err);
+  }
+}
+
 export async function PATCH(request: Request, { params }: Params) {
   try {
     const { supabase, accountId } = await requireRole("agent");

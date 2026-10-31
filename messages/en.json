@@ -443,7 +443,17 @@
       "channel": "Channel",
       "allChannels": "All channels",
       "department": "Department",
-      "allDepartments": "All departments"
+      "allDepartments": "All departments",
+      "deleteConversation": "Delete chat",
+      "deleteSelected": "Delete selected chats",
+      "deleteConfirmTitle": "Delete chat?",
+      "deleteConfirmDesc": "This permanently deletes the chat with {name} and all its messages. The contact is kept.",
+      "deleteConfirmBulkDesc": "Permanently delete {count} chats and all their messages? Contacts are kept.",
+      "delete": "Delete",
+      "deleting": "Deleting...",
+      "deleted": "Chat deleted",
+      "deleteFailed": "Could not delete chat",
+      "cancel": "Cancel"
     },
     "messageThread": {
       "backToConversations": "Back to conversations",

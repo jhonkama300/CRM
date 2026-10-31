@@ -41,6 +41,7 @@ import {
   Archive,
   Users,
   Inbox as InboxIcon,
+  Trash2,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
@@ -58,7 +59,17 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { useCan } from "@/hooks/use-can";
 import {
   fetchAccountMembers,
   memberLabel,
@@ -78,6 +89,8 @@ interface ConversationListProps {
   onConversationPatched?: (id: string, patch: Partial<Conversation>) => void;
   /** Ask the page to refetch conversations (used after adding tags). */
   onRequestResync?: () => void;
+  /** Remove deleted conversations from parent state. */
+  onDeleted?: (ids: string[]) => void;
 }
 
 const STATUS_COLORS: Record<ConversationStatus, string> = {
@@ -121,9 +134,11 @@ export function ConversationList({
   onBulkUpdated,
   onConversationPatched,
   onRequestResync,
+  onDeleted,
 }: ConversationListProps) {
   const t = useTranslations("Inbox.conversationList");
   const { user } = useAuth();
+  const canDelete = useCan("edit-settings");
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<InboxFilter>(initialFilter);
@@ -137,6 +152,11 @@ export function ConversationList({
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    ids: string[];
+    name?: string;
+  } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 60_000);
@@ -346,6 +366,34 @@ export function ConversationList({
     },
     [selectedIds, onBulkUpdated, onRequestResync, clearSelection, t],
   );
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget || deleteTarget.ids.length === 0) return;
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/inbox/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversation_ids: deleteTarget.ids,
+          action: "delete",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.error ?? t("deleteFailed"));
+        return;
+      }
+      onDeleted?.(deleteTarget.ids);
+      clearSelection();
+      setDeleteTarget(null);
+      toast.success(t("deleted"));
+    } catch {
+      toast.error(t("networkError"));
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteTarget, onDeleted, clearSelection, t]);
 
   const patchConversation = useCallback(
     async (id: string, patch: Partial<Conversation>) => {
@@ -756,6 +804,19 @@ export function ConversationList({
               >
                 <Archive className="h-3.5 w-3.5" />
               </button>
+              {canDelete && (
+                <button
+                  type="button"
+                  disabled={bulkBusy}
+                  onClick={() =>
+                    setDeleteTarget({ ids: [...selectedIds] })
+                  }
+                  className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  title={t("deleteSelected")}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={clearSelection}
@@ -798,12 +859,56 @@ export function ConversationList({
                 onAssign={(agentId) =>
                   void patchConversation(conv.id, { assigned_agent_id: agentId })
                 }
+                canDelete={canDelete}
+                onDelete={(conversation) =>
+                  setDeleteTarget({
+                    ids: [conversation.id],
+                    name:
+                      conversation.contact?.name ||
+                      conversation.contact?.phone ||
+                      t("unknown"),
+                  })
+                }
                 t={t}
               />
             ))}
           </div>
         )}
       </ScrollArea>
+
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && !deleting && setDeleteTarget(null)}
+      >
+        <DialogContent className="border-border bg-popover text-popover-foreground sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("deleteConfirmTitle")}</DialogTitle>
+            <DialogDescription>
+              {deleteTarget?.ids.length === 1
+                ? t("deleteConfirmDesc", { name: deleteTarget.name ?? "" })
+                : t("deleteConfirmBulkDesc", {
+                    count: deleteTarget?.ids.length ?? 0,
+                  })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleting}
+            >
+              {t("cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void confirmDelete()}
+              disabled={deleting}
+            >
+              {deleting ? t("deleting") : t("delete")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -821,6 +926,8 @@ interface ConversationItemProps {
   onSnooze: (until: string | null) => void;
   onFollowUp: (at: string | null) => void;
   onAssign: (agentId: string | null) => void;
+  canDelete: boolean;
+  onDelete: (conversation: Conversation) => void;
   t: ReturnType<typeof useTranslations>;
 }
 
@@ -837,6 +944,8 @@ function ConversationItem({
   onSnooze,
   onFollowUp,
   onAssign,
+  canDelete,
+  onDelete,
   t,
 }: ConversationItemProps) {
   const contact = conversation.contact;
@@ -1030,6 +1139,18 @@ function ConversationItem({
               <UserRoundX className="mr-2 h-3.5 w-3.5" />
               {t("leaveQueue")}
             </DropdownMenuItem>
+          )}
+          {canDelete && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => onDelete(conversation)}
+                className="text-sm text-destructive focus:text-destructive"
+              >
+                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                {t("deleteConversation")}
+              </DropdownMenuItem>
+            </>
           )}
         </DropdownMenuContent>
       </DropdownMenu>

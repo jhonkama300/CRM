@@ -591,6 +591,17 @@ function InboxPageInner() {
     setResyncToken((token) => token + 1);
   }, []);
 
+  const handleConversationsDeleted = useCallback(
+    (ids: string[]) => {
+      const deleted = new Set(ids);
+      setConversations((prev) => prev.filter((c) => !deleted.has(c.id)));
+      if (activeConversation && deleted.has(activeConversation.id)) {
+        handleCloseConversation();
+      }
+    },
+    [activeConversation, handleCloseConversation],
+  );
+
   // On mobile (<lg) we show a SINGLE pane — either the list or the
   // thread — rather than cramming both side-by-side. Selecting a
   // conversation slides the thread in; the thread's back button pops
@@ -630,6 +641,7 @@ function InboxPageInner() {
             onBulkUpdated={handleBulkUpdated}
             onConversationPatched={handleConversationPatched}
             onRequestResync={handleRequestResync}
+            onDeleted={handleConversationsDeleted}
             initialFilter={parseInboxFilter(searchParams.get("filter"))}
           />
         </div>

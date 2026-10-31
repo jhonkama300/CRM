@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireRole, toErrorResponse } from "@/lib/auth/account";
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
 
-type BulkAction = "mark_read" | "close" | "assign" | "tag";
+type BulkAction = "mark_read" | "close" | "assign" | "tag" | "delete";
 
 interface BulkBody {
   conversation_ids?: unknown;
@@ -27,7 +27,7 @@ function bad(message: string, status = 400) {
  */
 export async function POST(request: Request) {
   try {
-    const { supabase, accountId, userId } = await requireRole("agent");
+    const { supabase, accountId, userId, role } = await requireRole("agent");
     const limit = checkRateLimit(`inbox-bulk:${userId}`, RATE_LIMITS.send);
     if (!limit.success) return rateLimitResponse(limit);
 
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     if (ids.length > MAX_IDS) return bad(`Too many conversations (max ${MAX_IDS})`);
 
     const action = body.action as BulkAction;
-    if (!["mark_read", "close", "assign", "tag"].includes(action)) {
+    if (!["mark_read", "close", "assign", "tag", "delete"].includes(action)) {
       return bad("Unknown bulk action");
     }
 
@@ -54,6 +54,19 @@ export async function POST(request: Request) {
     if (ownErr) return bad(ownErr.message, 500);
     const ownedIds = (owned ?? []).map((row) => row.id as string);
     if (ownedIds.length === 0) return NextResponse.json({ updated: 0 });
+
+    if (action === "delete") {
+      if (role !== "owner" && role !== "admin") {
+        return bad("Only admins can delete conversations", 403);
+      }
+      const { error } = await supabase
+        .from("conversations")
+        .delete()
+        .eq("account_id", accountId)
+        .in("id", ownedIds);
+      if (error) return bad(error.message, 500);
+      return NextResponse.json({ deleted: ownedIds.length });
+    }
 
     if (action === "tag") {
       const tagId = typeof body.tag_id === "string" ? body.tag_id : "";

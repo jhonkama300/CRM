@@ -443,7 +443,17 @@
       "channel": "Canal",
       "allChannels": "Todos os canais",
       "department": "Departamento",
-      "allDepartments": "Todos os departamentos"
+      "allDepartments": "Todos os departamentos",
+      "deleteConversation": "Excluir conversa",
+      "deleteSelected": "Excluir conversas selecionadas",
+      "deleteConfirmTitle": "Excluir conversa?",
+      "deleteConfirmDesc": "Isso exclui permanentemente a conversa com {name} e todas as mensagens. O contato é mantido.",
+      "deleteConfirmBulkDesc": "Excluir permanentemente {count} conversas e todas as mensagens? Os contatos são mantidos.",
+      "delete": "Excluir",
+      "deleting": "Excluindo...",
+      "deleted": "Conversa excluída",
+      "deleteFailed": "Não foi possível excluir a conversa",
+      "cancel": "Cancelar"
     },
     "messageThread": {
       "backToConversations": "Voltar às conversas",
