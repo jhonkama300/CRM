@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireRole, toErrorResponse } from "@/lib/auth/account";
+import { recordAudit } from "@/lib/audit/log";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -25,7 +26,7 @@ function isoOrNull(value: unknown): string | null | undefined {
  */
 export async function DELETE(_request: Request, { params }: Params) {
   try {
-    const { supabase, accountId } = await requireRole("admin");
+    const { supabase, accountId, userId } = await requireRole("admin");
     const { id } = await params;
 
     const { data, error } = await supabase
@@ -45,6 +46,13 @@ export async function DELETE(_request: Request, { params }: Params) {
         { status: 404 },
       );
     }
+    await recordAudit({
+      accountId,
+      actorUserId: userId,
+      action: "conversation.deleted",
+      entityType: "conversation",
+      entityId: data.id,
+    });
     return NextResponse.json({ deleted: true, id: data.id });
   } catch (err) {
     return toErrorResponse(err);

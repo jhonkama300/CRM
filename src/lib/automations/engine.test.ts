@@ -10,8 +10,9 @@ const h = vi.hoisted(() => ({
     ownedConversation: null as { id: string } | null,
     automations: [] as Record<string, unknown>[],
     steps: [] as Record<string, unknown>[],
+    edges: [] as Record<string, unknown>[],
     fromCalls: [] as string[],
-    updateCalls: [] as { table: string; filters: [string, string, unknown][] }[],
+    updateCalls: [] as { table: string; filters: [string, string, unknown][]; payload?: unknown }[],
     upsertCalls: [] as { table: string; payload: unknown }[],
     logInserts: [] as Record<string, unknown>[],
     logUpdates: [] as Record<string, unknown>[],
@@ -75,7 +76,7 @@ vi.mock("./admin-client", () => {
     }
     if (table === "contacts") {
       if (type === "update") {
-        state.updateCalls.push({ table, filters: ops.filters });
+        state.updateCalls.push({ table, filters: ops.filters, payload: ops.payload });
         return { data: null, error: null };
       }
       // ownership guard / condition read
@@ -118,6 +119,12 @@ vi.mock("./admin-client", () => {
         .filter((r) => matches(r, ops.filters))
         .sort((a, b) => (a.position as number) - (b.position as number));
       return { data: one(rows), error: null };
+    }
+    if (table === "automation_edges") {
+      const rows = state.edges
+        .filter((r) => matches(r, ops.filters))
+        .sort((a, b) => (a.position as number) - (b.position as number));
+      return { data: ops.single ? rows[0] ?? null : rows, error: null };
     }
     return { data: null, error: null };
   }
@@ -167,6 +174,8 @@ vi.mock("./meta-send", () => ({
   engineSendText: vi.fn(async () => ({ whatsapp_message_id: "m1" })),
   engineSendTemplate: vi.fn(async () => ({ whatsapp_message_id: "m1" })),
   engineSendInteractive: vi.fn(async () => ({ whatsapp_message_id: "m1" })),
+  engineSendFlow: vi.fn(async () => ({ whatsapp_message_id: "m1" })),
+  engineSendLocationRequest: vi.fn(async () => ({ whatsapp_message_id: "m1" })),
 }));
 
 import {
@@ -190,6 +199,7 @@ beforeEach(() => {
   h.state.ownedConversation = null;
   h.state.automations = [];
   h.state.steps = [];
+  h.state.edges = [];
   h.state.fromCalls = [];
   h.state.updateCalls = [];
   h.state.upsertCalls = [];
@@ -743,11 +753,23 @@ describe("wait_for_reply", () => {
     });
   }
 
-  function reply(text: string, interactive_reply_id?: string) {
+  function reply(
+    text: string,
+    interactive_reply_id?: string,
+    extra?: {
+      message_location?: { latitude: number; longitude: number; name?: string; address?: string };
+      flow_response?: unknown;
+    },
+  ) {
     return resumeAwaitingReply({
       accountId: ACCOUNT,
       contactId: "c1",
-      context: { message_text: text, conversation_id: "conv1", interactive_reply_id },
+      context: {
+        message_text: text,
+        conversation_id: "conv1",
+        interactive_reply_id,
+        ...extra,
+      },
     });
   }
 
@@ -800,6 +822,110 @@ describe("wait_for_reply", () => {
     await reply("Marketing", "mkt");
 
     expect(sentTexts()).toEqual(["Other options", "Thanks for contacting"]);
+  });
+
+  it("parks on ask_data and saves the reply before continuing", async () => {
+    h.state.steps = [
+      step("ask", "ask_data", 0, { message: "What is your name?", field: "name" }),
+      step("after", "send_message", 1, say("Thanks")),
+    ];
+
+    await trigger("Hi");
+
+    expect(engineSendText).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "What is your name?" }),
+    );
+    expect(h.state.pending).toHaveLength(1);
+    expect(h.state.pending[0]).toMatchObject({
+      status: "awaiting_reply",
+      parked_step_id: "ask",
+    });
+    expect(engineSendText).toHaveBeenCalledTimes(1);
+
+    const consumed = await reply("Ana");
+
+    expect(consumed).toBe(true);
+    expect(h.state.updateCalls).toContainEqual({
+      table: "contacts",
+      filters: [
+        ["eq", "id", "c1"],
+        ["eq", "account_id", ACCOUNT],
+      ],
+      payload: { name: "Ana", updated_at: expect.any(String) },
+    });
+    expect(sentTexts()).toEqual(["What is your name?", "Thanks"]);
+    expect(h.state.pending[0].status).toBe("done");
+  });
+
+  it("parks on ask_location and saves coordinates before continuing", async () => {
+    h.state.steps = [
+      step("pin", "ask_location", 0, {
+        message: "Share your location",
+        field: "company",
+      }),
+      step("after", "send_message", 1, say("Thanks")),
+    ];
+
+    await trigger("Hi");
+
+    expect(h.state.pending).toHaveLength(1);
+    expect(h.state.pending[0]).toMatchObject({
+      status: "awaiting_reply",
+      parked_step_id: "pin",
+    });
+
+    await reply("Location shared", undefined, {
+      message_location: { latitude: 4.71, longitude: -74.07 },
+    });
+
+    expect(h.state.updateCalls).toContainEqual({
+      table: "contacts",
+      filters: [
+        ["eq", "id", "c1"],
+        ["eq", "account_id", ACCOUNT],
+      ],
+      payload: { company: "4.71,-74.07", updated_at: expect.any(String) },
+    });
+    expect(sentTexts()).toEqual(["Thanks"]);
+  });
+
+  it("parks after a WhatsApp Flow and saves its response", async () => {
+    h.state.steps = [
+      step("form", "send_flow", 0, {
+        flow_id: "123",
+        body: "Complete the form",
+        cta: "Open",
+        action: "navigate",
+        screen: "START",
+        field: "company",
+      }),
+      step("after", "send_message", 1, say("Done")),
+    ];
+
+    await trigger("Hi");
+
+    expect(h.state.pending).toHaveLength(1);
+    expect(h.state.pending[0]).toMatchObject({
+      status: "awaiting_reply",
+      parked_step_id: "form",
+    });
+
+    await reply("Flow submitted", undefined, {
+      flow_response: { name: "Ana", email: "ana@example.com" },
+    });
+
+    expect(h.state.updateCalls).toContainEqual({
+      table: "contacts",
+      filters: [
+        ["eq", "id", "c1"],
+        ["eq", "account_id", ACCOUNT],
+      ],
+      payload: {
+        company: '{"name":"Ana","email":"ana@example.com"}',
+        updated_at: expect.any(String),
+      },
+    });
+    expect(sentTexts()).toEqual(["Done"]);
   });
 
   it("hands the reply to steps after the wait as {{ message.text }}", async () => {
@@ -1182,6 +1308,49 @@ describe("wait_for_reply", () => {
       expect(await requeueStalledExecutions(new Date(Date.now() + 2 * STALLED_CLAIM_MS))).toBe(0);
       expect(h.state.pending[0].status).toBe("running");
     });
+  });
+
+  it("resumes graph edges after ask_data saves the reply", async () => {
+    h.state.steps = [
+      step("ask", "ask_data", 0, { message: "Your name?", field: "name" }),
+      step("after", "send_message", 1, say("Thanks")),
+    ];
+    h.state.edges = [
+      {
+        automation_id: "a1",
+        source_step_id: null,
+        source_port: "default",
+        target_step_id: "ask",
+        position: 0,
+      },
+      {
+        automation_id: "a1",
+        source_step_id: "ask",
+        source_port: "default",
+        target_step_id: "after",
+        position: 0,
+      },
+    ];
+
+    await trigger("Hi");
+
+    expect(h.state.pending[0]).toMatchObject({
+      status: "awaiting_reply",
+      parked_step_id: "ask",
+    });
+
+    await reply("Ana");
+
+    expect(h.state.updateCalls).toContainEqual({
+      table: "contacts",
+      filters: [
+        ["eq", "id", "c1"],
+        ["eq", "account_id", ACCOUNT],
+      ],
+      payload: { name: "Ana", updated_at: expect.any(String) },
+    });
+    expect(sentTexts()).toEqual(["Your name?", "Thanks"]);
+    expect(h.state.pending[0].status).toBe("done");
   });
 
   describe("condition values", () => {

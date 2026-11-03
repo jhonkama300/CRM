@@ -61,6 +61,21 @@ describe('validateBody', () => {
   it('accepts contiguous variables', () => {
     expect(validateBody('Hi {{1}} {{2}}')).toEqual([1, 2]);
   });
+  it('rejects more than two consecutive newlines', () => {
+    expect(() => validateBody('Line one\n\n\nLine two')).toThrow(/line breaks/);
+  });
+  it('accepts two consecutive newlines', () => {
+    expect(() => validateBody('Line one\n\nLine two')).not.toThrow();
+  });
+  it('rejects a body made only of variables', () => {
+    expect(() => validateBody('{{1}} {{2}}')).toThrow(/only variables/);
+  });
+  it('rejects more than ten emojis', () => {
+    expect(() => validateBody('🎉'.repeat(11))).toThrow(/emojis/);
+  });
+  it('accepts ten emojis', () => {
+    expect(() => validateBody('🎉'.repeat(10))).not.toThrow();
+  });
 });
 
 describe('validateFooter', () => {

@@ -19,17 +19,11 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { useTranslations } from "next-intl";
 import { contactHandle } from "@/lib/whatsapp/wa-identity";
-import { ContactActivity } from "./contact-activity";
+import { ConversationHistoryModal } from "./conversation-history-modal";
+import { ConversationComments } from "./conversation-comments";
 import { fetchAccountMembers, memberLabel } from "@/lib/account/members";
 import {
   extractMentionedUserIds,
@@ -40,9 +34,13 @@ import {
 
 interface ContactSidebarProps {
   contact: Contact | null;
+  conversationId?: string | null;
 }
 
-export function ContactSidebar({ contact }: ContactSidebarProps) {
+export function ContactSidebar({
+  contact,
+  conversationId = null,
+}: ContactSidebarProps) {
   const tSidebar = useTranslations("Inbox.sidebar");
   const tThread = useTranslations("Inbox.messageThread");
   const tActivity = useTranslations("Inbox.activity");
@@ -395,6 +393,10 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
 
           <div className="my-4 border-t border-border" />
 
+          <ConversationComments conversationId={conversationId} />
+
+          <div className="my-4 border-t border-border" />
+
           <button
             type="button"
             onClick={() => setActivityOpen(true)}
@@ -407,21 +409,11 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
         </div>
       </ScrollArea>
 
-      <Dialog open={activityOpen} onOpenChange={setActivityOpen}>
-        <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-popover-foreground">
-              {tActivity("title")}
-            </DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              {displayName}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto pr-1">
-            <ContactActivity contact={contact} showHeader={false} />
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ConversationHistoryModal
+        open={activityOpen}
+        onOpenChange={setActivityOpen}
+        contact={contact}
+      />
     </div>
   );
 }

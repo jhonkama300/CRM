@@ -4,6 +4,8 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react"
@@ -33,12 +35,42 @@ import {
   ArrowUp,
   MousePointerClick,
   List,
+  CheckCircle2,
+  Settings2,
+  X,
+  ClipboardList,
+  MapPin,
 } from "lucide-react"
 
+import {
+  Background,
+  Handle,
+  Panel,
+  Position,
+  ReactFlow,
+  ReactFlowProvider,
+  useNodesState,
+  useReactFlow,
+  MarkerType,
+  MiniMap,
+  type Edge as CanvasEdge,
+  type Node as CanvasNode,
+  type NodeProps,
+} from "@xyflow/react"
+import "@xyflow/react/dist/style.css"
+import { autoLayout } from "@/lib/flows/layout"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,6 +80,7 @@ import {
 import type {
   AccountMember,
   AutomationStepType,
+  ConditionStepConfig,
   AutomationTriggerType,
   CustomField,
   InteractiveMessagePayload,
@@ -79,6 +112,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { validateStepsForActivation } from "@/lib/automations/validate"
 import {
   LEGACY_CONDITION_TIMEZONE,
   browserTimeZone,
@@ -96,7 +130,23 @@ export interface BuilderStep {
   id?: string
   step_type: AutomationStepType
   step_config: Record<string, unknown>
+  position_x?: number | null
+  position_y?: number | null
   branches?: { yes: BuilderStep[]; no: BuilderStep[] }
+}
+
+export interface BuilderEdge {
+  source_step_id: string | null
+  source_port: string
+  target_step_id: string
+  position?: number
+}
+
+type StepClipboard = {
+  step: BuilderStep
+  scope: ParentScope
+  index: number
+  edges: BuilderEdge[]
 }
 
 export interface BuilderInitial {
@@ -107,6 +157,7 @@ export interface BuilderInitial {
   trigger_config: Record<string, unknown>
   is_active: boolean
   steps: BuilderStep[]
+  edges?: BuilderEdge[]
 }
 
 // ------------------------------------------------------------
@@ -132,6 +183,11 @@ const STEP_META: Record<AutomationStepType, StepMeta> = {
   create_deal: { label: "create_deal", icon: Briefcase, border: "border-l-primary" },
   wait: { label: "wait", icon: Hourglass, border: "border-l-border" },
   condition: { label: "condition", icon: GitBranch, border: "border-l-amber-500" },
+  ab_split: { label: "ab_split", icon: GitBranch, border: "border-l-amber-500" },
+  handoff: { label: "handoff", icon: UserCheck, border: "border-l-fuchsia-500" },
+  ask_data: { label: "ask_data", icon: PencilLine, border: "border-l-violet-500" },
+  send_flow: { label: "send_flow", icon: ClipboardList, border: "border-l-violet-500" },
+  ask_location: { label: "ask_location", icon: MapPin, border: "border-l-violet-500" },
   send_webhook: { label: "send_webhook", icon: Webhook, border: "border-l-primary" },
   close_conversation: { label: "close_conversation", icon: CircleSlash, border: "border-l-primary" },
 }
@@ -148,9 +204,162 @@ const ADDABLE_STEPS: AutomationStepType[] = [
   "create_deal",
   "wait",
   "condition",
+  "ab_split",
+  "ask_data",
+  "ask_location",
+  "send_flow",
+  "handoff",
   "send_webhook",
   "close_conversation",
 ]
+
+const PALETTE_GROUPS: { key: string; steps: AutomationStepType[] }[] = [
+  { key: "send", steps: ["send_message", "send_template", "send_flow"] },
+  { key: "ask", steps: ["send_buttons", "send_list", "ask_data", "ask_location"] },
+  { key: "logic", steps: ["wait", "condition", "ab_split", "send_webhook"] },
+  { key: "finish", steps: ["handoff"] },
+  {
+    key: "crm",
+    steps: [
+      "add_tag",
+      "remove_tag",
+      "assign_conversation",
+      "update_contact_field",
+      "create_deal",
+      "close_conversation",
+    ],
+  },
+]
+
+const GROUP_STYLE: Record<
+  string,
+  { border: string; icon: string; text: string; dot: string }
+> = {
+  send: {
+    border: "border-l-sky-500",
+    icon: "bg-sky-500/15 text-sky-400",
+    text: "text-sky-400",
+    dot: "bg-sky-400",
+  },
+  ask: {
+    border: "border-l-violet-500",
+    icon: "bg-violet-500/15 text-violet-400",
+    text: "text-violet-400",
+    dot: "bg-violet-400",
+  },
+  logic: {
+    border: "border-l-amber-500",
+    icon: "bg-amber-500/15 text-amber-400",
+    text: "text-amber-400",
+    dot: "bg-amber-400",
+  },
+  crm: {
+    border: "border-l-emerald-500",
+    icon: "bg-emerald-500/15 text-emerald-400",
+    text: "text-emerald-400",
+    dot: "bg-emerald-400",
+  },
+  finish: {
+    border: "border-l-fuchsia-500",
+    icon: "bg-fuchsia-500/15 text-fuchsia-400",
+    text: "text-fuchsia-400",
+    dot: "bg-fuchsia-400",
+  },
+}
+
+function groupForStep(type: AutomationStepType): string {
+  return (
+    PALETTE_GROUPS.find((group) => group.steps.includes(type))?.key ?? "send"
+  )
+}
+
+function countSendSteps(steps: BuilderStep[]): number {
+  let count = 0
+  for (const step of steps) {
+    if (
+      [
+        "send_message",
+        "send_buttons",
+        "send_list",
+        "send_template",
+        "ask_data",
+        "ask_location",
+        "send_flow",
+      ].includes(step.step_type)
+    ) {
+      count += 1
+    }
+    if ((step.step_type === "condition" || step.step_type === "ab_split") && step.branches) {
+      count += countSendSteps(step.branches.yes)
+      count += countSendSteps(step.branches.no)
+    }
+  }
+  return count
+}
+
+function deriveTreeEdges(steps: BuilderStep[]): BuilderEdge[] {
+  const edges: BuilderEdge[] = []
+  function walk(list: BuilderStep[], parentId: string | null, sourcePort: string) {
+    let previous = parentId
+    let first = true
+    for (const step of list) {
+      const target = step.id ?? step.cid
+      edges.push({
+        source_step_id: previous,
+        source_port: first ? sourcePort : "default",
+        target_step_id: target,
+      })
+      previous = target
+      first = false
+      if ((step.step_type === "condition" || step.step_type === "ab_split") && step.branches) {
+        walk(step.branches.yes, target, "yes")
+        walk(step.branches.no, target, "no")
+      }
+    }
+  }
+  walk(steps, null, "default")
+  return edges
+}
+
+interface LocatedStep {
+  step: BuilderStep
+  path: StepPath
+  scope: ParentScope
+  index: number
+  total: number
+}
+
+function findStepByCid(
+  steps: BuilderStep[],
+  cid: string,
+  basePath: StepPath = [],
+  scope: ParentScope = { kind: "root" },
+): LocatedStep | null {
+  for (let index = 0; index < steps.length; index += 1) {
+    const step = steps[index]
+    const path = childPath(basePath, scope, index)
+    if (step.cid === cid || step.id === cid) {
+      return { step, path, scope, index, total: steps.length }
+    }
+    if ((step.step_type === "condition" || step.step_type === "ab_split") && step.branches) {
+      const yes = findStepByCid(
+        step.branches.yes,
+        cid,
+        path,
+        { kind: "branch", parentCid: step.cid, branch: "yes" },
+      )
+      if (yes) return yes
+      const no = findStepByCid(
+        step.branches.no,
+        cid,
+        path,
+        { kind: "branch", parentCid: step.cid, branch: "no" },
+      )
+      if (no) return no
+    }
+  }
+  return null
+}
 
 const TRIGGER_OPTIONS: { value: AutomationTriggerType }[] = [
   { value: "new_message_received" },
@@ -213,8 +422,16 @@ function blankConfig(type: AutomationStepType): Record<string, unknown> {
       return { amount: 1, unit: "hours" }
     case "condition":
       return { subject: "tag_presence", operand: "", value: "" }
+    case "send_flow":
+      return { flow_id: "", screen: "", body: "", cta: "Abrir", action: "navigate" }
+    case "ask_data":
+      return { message: "", field: "name" }
+    case "ask_location":
+      return { message: "", field: "name" }
+    case "ab_split":
+    case "handoff":
     case "send_webhook":
-      return { url: "", headers: {}, body_template: "" }
+      return type === "send_webhook" ? { url: "", headers: {}, body_template: "" } : {}
     case "close_conversation":
       return {}
     default:
@@ -232,6 +449,12 @@ function blankConfig(type: AutomationStepType): Record<string, unknown> {
 // an older deployment), so an automation is always authorable.
 // ------------------------------------------------------------
 
+interface WhatsAppFlowOption {
+  id: string
+  name: string
+  status?: string
+}
+
 interface AutomationResources {
   tags: TagRecord[]
   members: AccountMember[]
@@ -239,6 +462,7 @@ interface AutomationResources {
   customFields: CustomField[]
   pipelines: PipelineOption[]
   stages: PipelineStageOption[]
+  flows: WhatsAppFlowOption[]
 }
 
 interface PipelineOption {
@@ -260,6 +484,7 @@ const ResourcesContext = createContext<AutomationResources>({
   customFields: [],
   pipelines: [],
   stages: [],
+  flows: [],
 })
 
 function useResources(): AutomationResources {
@@ -273,6 +498,7 @@ function ResourcesProvider({ children }: { children: ReactNode }) {
   const [customFields, setCustomFields] = useState<CustomField[]>([])
   const [pipelines, setPipelines] = useState<PipelineOption[]>([])
   const [stages, setStages] = useState<PipelineStageOption[]>([])
+  const [flows, setFlows] = useState<WhatsAppFlowOption[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -306,6 +532,17 @@ function ResourcesProvider({ children }: { children: ReactNode }) {
       setStages((stagesRes.data as PipelineStageOption[] | null) ?? [])
     })()
 
+    void (async () => {
+      try {
+        const res = await fetch("/api/whatsapp/flows", { cache: "no-store" })
+        if (!res.ok) return
+        const json = (await res.json()) as { flows?: WhatsAppFlowOption[] }
+        if (!cancelled) setFlows(json.flows ?? [])
+      } catch {
+        // Meta flows unavailable - keep the manual ID input.
+      }
+    })()
+
     // Members go through the API so we inherit its email-visibility
     // rules (agents/viewers don't see emails). Unreachable on older
     // deployments → pickers fall back to a raw agent-id input.
@@ -327,7 +564,7 @@ function ResourcesProvider({ children }: { children: ReactNode }) {
 
   return (
     <ResourcesContext.Provider
-      value={{ tags, members, templates, customFields, pipelines, stages }}
+      value={{ tags, members, templates, customFields, pipelines, stages, flows }}
     >
       {children}
     </ResourcesContext.Provider>
@@ -336,6 +573,47 @@ function ResourcesProvider({ children }: { children: ReactNode }) {
 
 const SELECT_CLASS =
   "w-full rounded-md border border-border bg-muted px-2 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none"
+
+function FlowIdInput({
+  value,
+  onChange,
+  t,
+}: {
+  value: string
+  onChange: (v: string) => void
+  t: ReturnType<typeof useTranslations>
+}) {
+  const { flows } = useResources()
+  const selected = flows.find((flow) => flow.id === value)
+  return (
+    <>
+      <Input
+        list="automation-flow-options"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="bg-muted text-foreground"
+      />
+      <datalist id="automation-flow-options">
+        {flows.map((flow) => (
+          <option key={flow.id} value={flow.id}>
+            {flow.name}
+          </option>
+        ))}
+      </datalist>
+      {selected && (
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          {selected.name}
+          {selected.status ? ` · ${selected.status}` : ""}
+        </p>
+      )}
+      {!selected && flows.length > 0 && (
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          {t("config.flowPick")}
+        </p>
+      )}
+    </>
+  )
+}
 
 /** Tag dropdown by name + color, storing the tag's id. Falls back to a
  *  raw id input when no tags exist yet. */
@@ -396,10 +674,12 @@ function ContactFieldSelect({
   value,
   onChange,
   t,
+  allowEmpty = false,
 }: {
   value: string
   onChange: (v: string) => void
   t: ReturnType<typeof useTranslations>
+  allowEmpty?: boolean
 }) {
   const { customFields } = useResources()
   const customValue = value.startsWith("custom:") ? value : ""
@@ -407,10 +687,11 @@ function ContactFieldSelect({
     customValue && customFields.some((f) => `custom:${f.id}` === customValue)
   return (
     <select
-      value={value || "name"}
+      value={value || (allowEmpty ? "" : "name")}
       onChange={(e) => onChange(e.target.value)}
       className={SELECT_CLASS}
     >
+      {allowEmpty && <option value="">{t("fields.none")}</option>}
       <option value="name">{t("fields.name")}</option>
       <option value="email">{t("fields.email")}</option>
       <option value="company">{t("fields.company")}</option>
@@ -657,8 +938,150 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
   const t = useTranslations("Automations.builder")
   const isEditing = !!initial.id
   const [state, setState] = useState<BuilderInitial>(initial)
+  const [edges, setEdges] = useState<BuilderEdge[]>(initial.edges ?? [])
   const [saving, setSaving] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const nodeClipboardRef = useRef<StepClipboard | null>(null)
+  const [triggerOpen, setTriggerOpen] = useState(false)
+  const [testOpen, setTestOpen] = useState(false)
+  const [testText, setTestText] = useState("")
+  const [testPath, setTestPath] = useState<string[]>([])
+  const selectedStep = expandedId ? findStepByCid(state.steps, expandedId) : null
+  const estimatedMessages = useMemo(() => countSendSteps(state.steps), [state.steps])
+  const triggerPosition = {
+    x:
+      typeof state.trigger_config.__canvas_x === "number"
+        ? state.trigger_config.__canvas_x
+        : 0,
+    y:
+      typeof state.trigger_config.__canvas_y === "number"
+        ? state.trigger_config.__canvas_y
+        : 0,
+  }
+
+  useEffect(() => {
+    const collectCids = (step: BuilderStep): string[] => [
+      step.cid,
+      ...(step.branches
+        ? [
+            ...step.branches.yes.flatMap(collectCids),
+            ...step.branches.no.flatMap(collectCids),
+          ]
+        : []),
+    ]
+
+    const handler = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (
+        !target ||
+        target.closest(
+          'input, textarea, select, [contenteditable="true"], [contenteditable=""]',
+        ) ||
+        !target.closest('.react-flow')
+      ) {
+        return
+      }
+
+      const mod = event.ctrlKey || event.metaKey
+      const key = event.key.toLowerCase()
+
+      if (mod && key === 'v' && nodeClipboardRef.current) {
+        event.preventDefault()
+        const clip = nodeClipboardRef.current
+        const parentExists =
+          clip.scope.kind === 'root' ||
+          !!findStepByCid(state.steps, clip.scope.parentCid)
+        const nextSteps = insertAt(
+          state.steps,
+          parentExists ? clip.scope : { kind: 'root' },
+          parentExists ? clip.index : state.steps.length,
+          clip.step,
+        )
+        setState((s) => ({ ...s, steps: nextSteps }))
+        if (edges.length > 0) {
+          const known = new Set(nextSteps.flatMap(collectCids))
+          setEdges((prev) => {
+            const restored = clip.edges.filter(
+              (edge) =>
+                (edge.source_step_id === null ||
+                  known.has(edge.source_step_id)) &&
+                known.has(edge.target_step_id),
+            )
+            const merged = [...prev]
+            for (const edge of restored) {
+              if (
+                !merged.some(
+                  (current) =>
+                    current.source_step_id === edge.source_step_id &&
+                    current.source_port === edge.source_port &&
+                    current.target_step_id === edge.target_step_id,
+                )
+              ) {
+                merged.push(edge)
+              }
+            }
+            return merged
+          })
+        }
+        setExpandedId(clip.step.cid)
+        nodeClipboardRef.current = null
+        return
+      }
+
+      if (!selectedStep) return
+      const located = findStepByCid(state.steps, selectedStep.step.cid)
+      if (!located) return
+
+      if (key === 'delete' || key === 'backspace') {
+        event.preventDefault()
+        const removed = new Set(collectCids(located.step))
+        setState((s) => ({ ...s, steps: removeAt(s.steps, located.path) }))
+        setEdges((prev) =>
+          prev.filter(
+            (edge) =>
+              !(
+                (edge.source_step_id !== null &&
+                  removed.has(edge.source_step_id)) ||
+                removed.has(edge.target_step_id)
+              ),
+          ),
+        )
+        setExpandedId(null)
+        return
+      }
+
+      if (mod && key === 'x') {
+        event.preventDefault()
+        const removed = new Set(collectCids(located.step))
+        nodeClipboardRef.current = {
+          step: located.step,
+          scope: located.scope,
+          index: located.index,
+          edges: edges.filter(
+            (edge) =>
+              (edge.source_step_id !== null &&
+                removed.has(edge.source_step_id)) ||
+              removed.has(edge.target_step_id),
+          ),
+        }
+        setState((s) => ({ ...s, steps: removeAt(s.steps, located.path) }))
+        setEdges((prev) =>
+          prev.filter(
+            (edge) =>
+              !(
+                (edge.source_step_id !== null &&
+                  removed.has(edge.source_step_id)) ||
+                removed.has(edge.target_step_id)
+              ),
+          ),
+        )
+        setExpandedId(null)
+      }
+    }
+
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [edges, selectedStep, state.steps])
 
   function patchTop<K extends keyof BuilderInitial>(key: K, value: BuilderInitial[K]) {
     setState((s) => ({ ...s, [key]: value }))
@@ -670,16 +1093,39 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
     setState((s) => ({ ...s, steps: mapAtPath(s.steps, path, updater) }))
   }
 
-  function addStepAt(parent: ParentScope, index: number, type: AutomationStepType) {
+  function addStepAt(
+    parent: ParentScope,
+    index: number,
+    type: AutomationStepType,
+    position?: { x: number; y: number },
+  ) {
     const node: BuilderStep = {
       cid: cid(),
       id: newStepId(),
       step_type: type,
       step_config: blankConfig(type),
-      branches: type === "condition" ? { yes: [], no: [] } : undefined,
+      position_x: position?.x ?? null,
+      position_y: position?.y ?? null,
+      branches:
+        type === "condition" || type === "ab_split"
+          ? { yes: [], no: [] }
+          : undefined,
     }
     setState((s) => ({ ...s, steps: insertAt(s.steps, parent, index, node) }))
     setExpandedId(node.cid)
+  }
+
+  function handleDrop(event: React.DragEvent) {
+    event.preventDefault()
+    const type = event.dataTransfer.getData("application/x-automation-step") as AutomationStepType
+    if (!ADDABLE_STEPS.includes(type)) return
+    addStepAt({ kind: "root" }, state.steps.length, type)
+  }
+
+  function updateStepPosition(cid: string, x: number, y: number) {
+    const located = findStepByCid(state.steps, cid)
+    if (!located) return
+    updateStep(located.path, (step) => ({ ...step, position_x: x, position_y: y }))
   }
 
   function deleteStepAt(path: StepPath) {
@@ -688,6 +1134,76 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
 
   function moveStepAt(path: StepPath, direction: -1 | 1) {
     setState((s) => ({ ...s, steps: moveAt(s.steps, path, direction) }))
+  }
+
+  function runTest() {
+    const graph = edges.length > 0 ? edges : deriveTreeEdges(state.steps)
+    const byId = new Map<string, BuilderStep>()
+    const collect = (list: BuilderStep[]) => {
+      for (const step of list) {
+        byId.set(step.id ?? step.cid, step)
+        if ((step.step_type === "condition" || step.step_type === "ab_split") && step.branches) {
+          collect(step.branches.yes)
+          collect(step.branches.no)
+        }
+      }
+    }
+    collect(state.steps)
+    const path: string[] = []
+    const visited = new Set<string>()
+    let current = graph.find((edge) => edge.source_step_id === null)?.target_step_id
+    while (current && !visited.has(current) && path.length < 50) {
+      visited.add(current)
+      const step = byId.get(current)
+      if (!step) break
+      path.push(t(`steps.${STEP_META[step.step_type].label}`))
+      let port = "default"
+      if ((step.step_type === "condition" || step.step_type === "ab_split")) {
+        const cfg = step.step_config as unknown as ConditionStepConfig
+        const needle = (cfg.value ?? "").toLowerCase()
+        const matches =
+          cfg.subject !== "message_content" ||
+          !needle ||
+          testText.toLowerCase().includes(needle)
+        port = matches ? "yes" : "no"
+      } else if (step.step_type === "send_buttons" || step.step_type === "send_list") {
+        const buttons = Array.isArray(step.step_config.buttons)
+          ? (step.step_config.buttons as Array<{ id?: string; title?: string }>)
+          : []
+        const sections = Array.isArray(step.step_config.sections)
+          ? (step.step_config.sections as Array<{ rows?: Array<{ id?: string; title?: string }> }>)
+          : []
+        const options = [
+          ...buttons,
+          ...sections.flatMap((section) => section.rows ?? []),
+        ]
+        const match = options.find(
+          (option) =>
+            (option.id ?? "").toLowerCase() === testText.trim().toLowerCase() ||
+            (option.title ?? "").toLowerCase() === testText.trim().toLowerCase(),
+        )
+        port = match?.id ?? "other"
+      }
+      const outgoing = graph.filter((edge) => edge.source_step_id === current)
+      current =
+        outgoing.find((edge) => edge.source_port === port)?.target_step_id ??
+        outgoing.find((edge) => edge.source_port === "default")?.target_step_id ??
+        outgoing[0]?.target_step_id
+    }
+    setTestPath(path)
+  }
+
+  function review() {
+    const issues = validateStepsForActivation(toApiSteps(state.steps))
+    if (issues.length > 0) {
+      toast.error(
+        issues.length === 1
+          ? issues[0].message
+          : t("reviewIssues", { count: issues.length }),
+      )
+      return
+    }
+    toast.success(t("reviewOk"))
   }
 
   async function save() {
@@ -700,6 +1216,7 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
         trigger_config: state.trigger_config,
         is_active: state.is_active,
         steps: toApiSteps(state.steps),
+        edges,
       }
 
       const res = isEditing
@@ -759,14 +1276,46 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
           placeholder={t("untitled")}
           className="min-w-0 flex-1 rounded-md bg-transparent px-2 py-1 text-sm font-semibold text-foreground placeholder:text-muted-foreground focus:bg-muted focus:outline-none sm:text-base"
         />
+        <div className="hidden items-center gap-3 text-xs text-muted-foreground md:flex">
+          <span>{t("stepsCount", { count: state.steps.length })}</span>
+          <span>{t("estimatedMessages", { count: estimatedMessages })}</span>
+        </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="hidden sm:inline">{t("active")}</span>
+          <span className="hidden sm:inline">
+            {state.is_active ? t("active") : t("paused")}
+          </span>
           <Switch
             checked={state.is_active}
             onCheckedChange={(v) => patchTop("is_active", !!v)}
             aria-label={t("activeAria")}
           />
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setTestOpen(true)}
+          className="hidden md:inline-flex"
+        >
+          {t("test")}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setTriggerOpen(true)}
+          className="hidden md:inline-flex"
+        >
+          <Settings2 className="h-4 w-4" />
+          {t("configure")}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={review}
+          className="hidden sm:inline-flex"
+        >
+          <CheckCircle2 className="h-4 w-4" />
+          {t("review")}
+        </Button>
         <Button
           onClick={save}
           disabled={saving}
@@ -777,10 +1326,125 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
         </Button>
       </header>
 
-      {/* Canvas */}
-      <div className="relative flex-1 overflow-y-auto">
-        <div className="absolute inset-0 bg-[radial-gradient(circle,var(--border)_1px,transparent_1px)] [background-size:20px_20px] pointer-events-none" />
-        <div className="relative mx-auto flex max-w-2xl flex-col items-center gap-0 px-4 py-10">
+      <div className="flex min-h-0 flex-1">
+        <BuilderPalette
+          t={t}
+          onPick={(type) => addStepAt({ kind: "root" }, state.steps.length, type)}
+        />
+
+        <div className="relative min-w-0 flex-1 overflow-hidden">
+          <div className="h-full overflow-y-auto xl:hidden" onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
+            <div className="absolute inset-0 bg-[radial-gradient(circle,var(--border)_1px,transparent_1px)] [background-size:20px_20px] pointer-events-none" />
+            <div className="relative mx-auto flex max-w-2xl flex-col items-center gap-0 px-4 py-10">
+              <ResourcesProvider>
+                <TriggerCard
+                  type={state.trigger_type}
+                  config={state.trigger_config}
+                  onTypeChange={(tVal) => patchTop("trigger_type", tVal)}
+                  onConfigChange={(c) => patchTop("trigger_config", c)}
+                  t={t}
+                />
+                <StepList
+                  steps={state.steps}
+                  basePath={[]}
+                  scope={{ kind: "root" }}
+                  expandedId={expandedId}
+                  setExpandedId={setExpandedId}
+                  updateStep={updateStep}
+                  addStepAt={addStepAt}
+                  deleteStepAt={deleteStepAt}
+                  moveStepAt={moveStepAt}
+                />
+              </ResourcesProvider>
+            </div>
+          </div>
+          <div className="hidden h-full xl:block" onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
+            <AutomationCanvas
+              steps={state.steps}
+              triggerLabel={t(`triggers.${state.trigger_type}.label`)}
+              selectedId={expandedId}
+              onSelect={setExpandedId}
+              onPositionChange={updateStepPosition}
+              triggerPosition={triggerPosition}
+              onTriggerPositionChange={(x, y) =>
+                patchTop("trigger_config", {
+                  ...state.trigger_config,
+                  __canvas_x: x,
+                  __canvas_y: y,
+                })
+              }
+              onDropStep={(type, position) =>
+                addStepAt({ kind: "root" }, state.steps.length, type, position)
+              }
+              edges={edges}
+              onConnect={(edge, base) => {
+                const exists = base.some(
+                  (e) =>
+                    e.source_step_id === edge.source_step_id &&
+                    e.source_port === edge.source_port &&
+                    e.target_step_id === edge.target_step_id,
+                )
+                if (!exists) setEdges([...base, edge])
+              }}
+              onEdgesReplace={setEdges}
+              onClearStepSelection={() => setExpandedId(null)}
+              t={t}
+            />
+          </div>
+        </div>
+
+        <InspectorPanel
+          t={t}
+          triggerLabel={t(`triggers.${state.trigger_type}.label`)}
+          stepCount={state.steps.length}
+          onReview={review}
+          selected={selectedStep}
+          onUpdateStep={updateStep}
+          onDeleteStep={deleteStepAt}
+          onMoveStep={moveStepAt}
+          onCloseStep={() => setExpandedId(null)}
+        />
+      </div>
+
+      <Dialog open={testOpen} onOpenChange={setTestOpen}>
+        <DialogContent className="border-border bg-popover text-popover-foreground sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("testTitle")}</DialogTitle>
+            <DialogDescription>{t("testDesc")}</DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={testText}
+            onChange={(event) => setTestText(event.target.value)}
+            placeholder={t("testPlaceholder")}
+            rows={3}
+            className="bg-muted text-foreground"
+          />
+          <Button onClick={runTest} className="w-full">
+            {t("testRun")}
+          </Button>
+          <div className="space-y-1 rounded-lg border border-border p-3">
+            <p className="text-xs font-semibold text-foreground">
+              {t("testPath")}
+            </p>
+            {testPath.length === 0 ? (
+              <p className="text-xs text-muted-foreground">{t("testEmpty")}</p>
+            ) : (
+              testPath.map((item, index) => (
+                <p key={`${item}-${index}`} className="text-xs text-muted-foreground">
+                  {index + 1}. {item}
+                </p>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={triggerOpen} onOpenChange={setTriggerOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto border-border bg-popover text-popover-foreground sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("triggerDialogTitle")}</DialogTitle>
+            <DialogDescription>{t("triggerDialogDesc")}</DialogDescription>
+          </DialogHeader>
           <ResourcesProvider>
             <TriggerCard
               type={state.trigger_type}
@@ -789,20 +1453,784 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
               onConfigChange={(c) => patchTop("trigger_config", c)}
               t={t}
             />
-            <StepList
-              steps={state.steps}
-              basePath={[]}
-              scope={{ kind: "root" }}
-              expandedId={expandedId}
-              setExpandedId={setExpandedId}
-              updateStep={updateStep}
-              addStepAt={addStepAt}
-              deleteStepAt={deleteStepAt}
-              moveStepAt={moveStepAt}
-            />
           </ResourcesProvider>
-        </div>
+          <DialogFooter>
+            <Button onClick={() => setTriggerOpen(false)}>{t("done")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+function BuilderPalette({
+  t,
+  onPick,
+}: {
+  t: ReturnType<typeof useTranslations>
+  onPick: (type: AutomationStepType) => void
+}) {
+  const draggedAt = useRef(0)
+  return (
+    <aside className="hidden w-60 shrink-0 flex-col overflow-y-auto border-r border-border bg-card/50 xl:flex">
+      <div className="border-b border-border p-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {t("palette.title")}
+        </p>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">{t("palette.hint")}</p>
       </div>
+      <div className="space-y-4 p-3">
+        {PALETTE_GROUPS.map((group) => {
+          const groupStyle = GROUP_STYLE[group.key] ?? GROUP_STYLE.send
+          return (
+          <div key={group.key}>
+            <p className="mb-1.5 flex items-center gap-1.5 px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <span className={cn("h-1.5 w-1.5 rounded-full", groupStyle.dot)} />
+              {t(`palette.groups.${group.key}`)}
+            </p>
+            <div className="space-y-1">
+              {group.steps.map((type) => {
+                const meta = STEP_META[type]
+                const Icon = meta.icon
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    draggable
+                    onDragStart={(e) => {
+                      draggedAt.current = Date.now()
+                      e.dataTransfer.setData("application/x-automation-step", type)
+                    }}
+                    onClick={() => {
+                      if (Date.now() - draggedAt.current < 400) return
+                      onPick(type)
+                    }}
+                    className="flex w-full cursor-grab items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 text-left text-xs text-foreground transition-colors hover:border-border hover:bg-muted active:cursor-grabbing"
+                  >
+                    <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-md", groupStyle.icon)}>
+                      <Icon className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{t(`steps.${meta.label}`)}</span>
+                      <span className="block truncate text-[10px] text-muted-foreground">
+                        {t(`hints.${type}`)}
+                      </span>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          )
+        })}
+      </div>
+    </aside>
+  )
+}
+
+function InspectorPanel({
+  t,
+  triggerLabel,
+  stepCount,
+  onReview,
+  selected,
+  onUpdateStep,
+  onDeleteStep,
+  onMoveStep,
+  onCloseStep,
+}: {
+  t: ReturnType<typeof useTranslations>
+  triggerLabel: string
+  stepCount: number
+  onReview: () => void
+  selected: LocatedStep | null
+  onUpdateStep: (path: StepPath, updater: (s: BuilderStep) => BuilderStep) => void
+  onDeleteStep: (path: StepPath) => void
+  onMoveStep: (path: StepPath, direction: -1 | 1) => void
+  onCloseStep: () => void
+}) {
+  return (
+    <aside className="hidden w-80 shrink-0 flex-col overflow-y-auto border-l border-border bg-card/50 xl:flex">
+      <div className="flex items-center justify-between border-b border-border p-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {selected ? t("inspector.stepTitle") : t("inspector.title")}
+        </p>
+        {selected && (
+          <button
+            type="button"
+            onClick={onCloseStep}
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label={t("inspector.closeStep")}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+
+      {selected ? (
+        <div className="space-y-3 p-3">
+          <div className="rounded-lg border border-border bg-card p-3">
+            <p className="text-sm font-semibold text-foreground">
+              {t(`steps.${STEP_META[selected.step.step_type].label}`)}
+            </p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {t("inspector.stepHint")}
+            </p>
+          </div>
+          <StepEditor
+            step={selected.step}
+            onChange={(next) => onUpdateStep(selected.path, () => next)}
+          />
+          <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
+            <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={selected.index === 0}
+                aria-label={t("moveUp")}
+                onClick={() => onMoveStep(selected.path, -1)}
+              >
+                <ArrowUp className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={selected.index === selected.total - 1}
+                aria-label={t("moveDown")}
+                onClick={() => onMoveStep(selected.path, 1)}
+              >
+                <ArrowDown className="h-4 w-4" />
+              </Button>
+            </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                onDeleteStep(selected.path)
+                onCloseStep()
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {t("delete")}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3 p-3">
+          <div className="rounded-lg border border-border bg-card p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {t("inspector.trigger")}
+            </p>
+            <p className="mt-1 text-sm font-medium text-foreground">{triggerLabel}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {t("inspector.flow")}
+            </p>
+            <p className="mt-1 text-sm font-medium text-foreground">
+              {t("stepsCount", { count: stepCount })}
+            </p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {t("inspector.stepHint")}
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={onReview} className="w-full">
+            <CheckCircle2 className="h-4 w-4" />
+            {t("review")}
+          </Button>
+          <p className="text-[11px] text-muted-foreground">{t("inspector.hint")}</p>
+        </div>
+      )}
+    </aside>
+  )
+}
+
+interface AutomationCanvasData extends Record<string, unknown> {
+  kind: "trigger" | "step"
+  cid?: string
+  type?: AutomationStepType
+  title: string
+  subtitle: string
+  selected?: boolean
+  ports?: Array<{ id: string; label: string }>
+}
+
+const STEP_COLOR: Record<AutomationStepType, string> = {
+  send_message: "#3b82f6",
+  send_template: "#3b82f6",
+  send_buttons: "#8b5cf6",
+  send_list: "#8b5cf6",
+  wait: "#14b8a6",
+  condition: "#f97316",
+  ab_split: "#f97316",
+  ask_data: "#8b5cf6",
+  send_flow: "#8b5cf6",
+  ask_location: "#8b5cf6",
+  handoff: "#d946ef",
+  send_webhook: "#0ea5e9",
+  add_tag: "#ec4899",
+  remove_tag: "#ec4899",
+  assign_conversation: "#ec4899",
+  update_contact_field: "#ec4899",
+  create_deal: "#ec4899",
+  close_conversation: "#d946ef",
+}
+
+function sourcePortsForStep(step: BuilderStep) {
+  if (step.step_type === "condition" || step.step_type === "ab_split") {
+    return [
+      { id: "yes", label: "A" },
+      { id: "no", label: "B" },
+    ]
+  }
+  if (step.step_type === "send_buttons") {
+    const buttons = Array.isArray(step.step_config.buttons)
+      ? (step.step_config.buttons as Array<{ id?: string; title?: string }>)
+      : []
+    return [
+      ...buttons.map((button, index) => ({
+        id: button.id || `btn_${index + 1}`,
+        label: button.title || button.id || `Botón ${index + 1}`,
+      })),
+      { id: "other", label: "Otra respuesta" },
+    ]
+  }
+  if (step.step_type === "send_list") {
+    const sections = Array.isArray(step.step_config.sections)
+      ? (step.step_config.sections as Array<{
+          rows?: Array<{ id?: string; title?: string }>
+        }>)
+      : []
+    return sections.flatMap((section) =>
+      (section.rows ?? []).map((row, index) => ({
+        id: row.id || `row_${index + 1}`,
+        label: row.title || row.id || `Opción ${index + 1}`,
+      })),
+    )
+  }
+  return [{ id: "default", label: "Siguiente" }]
+}
+
+function AutomationCanvasNode({ data }: NodeProps) {
+  const d = data as AutomationCanvasData
+  const t = useTranslations("Automations.builder")
+  const meta = d.kind === "step" && d.type ? STEP_META[d.type] : null
+  const Icon = meta ? meta.icon : Zap
+  const group = d.kind === "step" && d.type ? groupForStep(d.type) : "send"
+  const color =
+    d.kind === "trigger"
+      ? "#10b981"
+      : d.type
+        ? STEP_COLOR[d.type]
+        : "#3b82f6"
+
+  return (
+    <div
+      className={cn(
+        "group relative w-[260px] cursor-grab rounded-xl border bg-white text-left shadow-[0_2px_8px_rgba(15,23,42,0.08)] transition-all duration-150 active:cursor-grabbing",
+        d.selected
+          ? "border-[#8b5cf6] shadow-[0_8px_24px_-6px_rgba(139,92,246,0.35)] ring-2 ring-[#8b5cf6]/25"
+          : "border-slate-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_10px_24px_-8px_rgba(15,23,42,0.18)]",
+      )}
+    >
+      <div
+        className="h-1 w-full rounded-t-xl"
+        style={{ backgroundColor: color }}
+      />
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!h-2.5 !w-2.5 !border-2 !border-white !bg-slate-400"
+      />
+      <div className="flex items-center gap-2 px-3 pb-1 pt-2.5">
+        <span
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
+          style={{ backgroundColor: `${color}18`, color }}
+        >
+          <Icon className="h-4 w-4" />
+        </span>
+        <p className="truncate text-[11px] font-semibold tracking-wide" style={{ color }}>
+          {d.kind === "trigger" ? t("canvas.trigger") : t(`steps.${meta?.label}`)}
+        </p>
+        <span className="ml-auto rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-400">
+          {t(`palette.groups.${group}`)}
+        </span>
+      </div>
+      <div className="px-3 pb-3">
+        <p className="line-clamp-3 text-[11px] leading-relaxed text-slate-600">
+          {d.subtitle}
+        </p>
+      </div>
+      {d.ports && d.ports.length > 1 ? (
+        <div className="space-y-0.5 border-t border-slate-100 px-3 py-1.5">
+          {d.ports.map((port) => (
+            <div
+              key={port.id}
+              className="relative flex items-center gap-1.5 rounded px-1 py-1 text-[10px] text-slate-500 transition-colors hover:bg-slate-50"
+            >
+              <span
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: color }}
+              />
+              <span className="min-w-0 flex-1 truncate">{port.label}</span>
+              <Handle
+                id={port.id}
+                type="source"
+                position={Position.Right}
+                style={{ position: "absolute", right: -21, top: "50%", backgroundColor: color }}
+                className="!h-2.5 !w-2.5 !border-2 !border-white"
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <Handle
+          id="default"
+          type="source"
+          position={Position.Right}
+          style={{ backgroundColor: color }}
+          className="!h-2.5 !w-2.5 !border-2 !border-white"
+        />
+      )}
+    </div>
+  )
+}
+
+function AutomationCanvas({
+  steps,
+  triggerLabel,
+  selectedId,
+  onSelect,
+  onPositionChange,
+  triggerPosition,
+  onTriggerPositionChange,
+  onDropStep,
+  edges,
+  onConnect,
+  onEdgesReplace,
+  onClearStepSelection,
+  t,
+}: {
+  steps: BuilderStep[]
+  triggerLabel: string
+  selectedId: string | null
+  onSelect: (cid: string) => void
+  onPositionChange: (cid: string, x: number, y: number) => void
+  triggerPosition: { x: number; y: number }
+  onTriggerPositionChange: (x: number, y: number) => void
+  onDropStep: (type: AutomationStepType, position: { x: number; y: number }) => void
+  edges: BuilderEdge[]
+  onConnect: (edge: BuilderEdge, base: BuilderEdge[]) => void
+  onEdgesReplace: (edges: BuilderEdge[]) => void
+  onClearStepSelection: () => void
+  t: ReturnType<typeof useTranslations>
+}) {
+  return (
+    <ReactFlowProvider>
+      <AutomationCanvasInner
+        steps={steps}
+        triggerLabel={triggerLabel}
+        selectedId={selectedId}
+        onSelect={onSelect}
+        onPositionChange={onPositionChange}
+        triggerPosition={triggerPosition}
+        onTriggerPositionChange={onTriggerPositionChange}
+        onDropStep={onDropStep}
+        edges={edges}
+        onConnect={onConnect}
+        onEdgesReplace={onEdgesReplace}
+        onClearStepSelection={onClearStepSelection}
+        t={t}
+      />
+    </ReactFlowProvider>
+  )
+}
+
+function AutomationCanvasInner({
+  steps,
+  triggerLabel,
+  selectedId,
+  onSelect,
+  onPositionChange,
+  triggerPosition,
+  onTriggerPositionChange,
+  onDropStep,
+  edges: savedEdges,
+  onConnect,
+  onEdgesReplace,
+  onClearStepSelection,
+  t,
+}: {
+  steps: BuilderStep[]
+  triggerLabel: string
+  selectedId: string | null
+  onSelect: (cid: string) => void
+  onPositionChange: (cid: string, x: number, y: number) => void
+  triggerPosition: { x: number; y: number }
+  onTriggerPositionChange: (x: number, y: number) => void
+  onDropStep: (type: AutomationStepType, position: { x: number; y: number }) => void
+  edges: BuilderEdge[]
+  onConnect: (edge: BuilderEdge, base: BuilderEdge[]) => void
+  onEdgesReplace: (edges: BuilderEdge[]) => void
+  onClearStepSelection: () => void
+  t: ReturnType<typeof useTranslations>
+}) {
+  const { screenToFlowPosition, fitView, zoomIn, zoomOut } = useReactFlow()
+  const [dragOver, setDragOver] = useState(false)
+  const [draggingNode, setDraggingNode] = useState(false)
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
+  const edgeClipboardRef = useRef<BuilderEdge | null>(null)
+
+  const { nodes, derivedEdges } = useMemo(() => {
+    const nextNodes: CanvasNode[] = [
+      {
+        id: "trigger",
+        type: "automation",
+        draggable: true,
+        selectable: true,
+        position: triggerPosition,
+        data: {
+          kind: "trigger",
+          title: triggerLabel,
+          subtitle: t("canvas.triggerHint"),
+          ports: [{ id: "default", label: "Siguiente" }],
+        } satisfies AutomationCanvasData,
+      },
+    ]
+    const nextEdges: CanvasEdge[] = []
+
+    function addList(
+      list: BuilderStep[],
+      parentId: string,
+      label?: string,
+      sourceHandle?: string,
+    ) {
+      let previous = parentId
+      list.forEach((step, index) => {
+        const nodeId = step.id ?? step.cid
+        nextNodes.push({
+          id: nodeId,
+          type: "automation",
+          draggable: true,
+          selectable: true,
+          position: { x: 0, y: 0 },
+          data: {
+            kind: "step",
+            type: step.step_type,
+            title: t(`steps.${STEP_META[step.step_type].label}`),
+            subtitle: previewFor(step, t),
+            cid: step.cid,
+            ports: sourcePortsForStep(step),
+            selected: step.cid === selectedId,
+          } satisfies AutomationCanvasData,
+        })
+        nextEdges.push({
+          id: `${previous}->${nodeId}`,
+          source: previous,
+          target: nodeId,
+          sourceHandle: index === 0 ? sourceHandle : undefined,
+          label: index === 0 ? label : undefined,
+          type: "smoothstep",
+          animated: step.cid === selectedId,
+          markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
+          style: { stroke: "#94a3b8", strokeWidth: 1.4 },
+          labelStyle: { fill: "#64748b", fontSize: 10, fontWeight: 600 },
+          labelBgStyle: { fill: "#f8fafc" },
+        })
+        previous = nodeId
+        if (
+          (step.step_type === "condition" || step.step_type === "ab_split") &&
+          step.branches
+        ) {
+          addList(step.branches.yes, nodeId, t("canvas.yes"), "yes")
+          addList(step.branches.no, nodeId, t("canvas.no"), "no")
+        }
+      })
+    }
+
+    addList(steps, "trigger")
+    const positions = autoLayout(
+      nextNodes.map((n) => ({ id: n.id, width: 260, height: 100 })),
+      nextEdges,
+      { direction: "LR", rankSep: 96, nodeSep: 48, defaultWidth: 260, defaultHeight: 100 },
+    )
+    const layoutTrigger = positions.get("trigger") ?? { x: 0, y: 0 }
+    const offset = {
+      x: triggerPosition.x - layoutTrigger.x,
+      y: triggerPosition.y - layoutTrigger.y,
+    }
+    return {
+      nodes: nextNodes.map((n) => {
+        if (n.id === "trigger") return n
+        const saved = findStepByCid(steps, n.id)?.step
+        const savedPosition =
+          saved?.position_x != null && saved?.position_y != null
+            ? { x: saved.position_x, y: saved.position_y }
+            : null
+        const auto = positions.get(n.id) ?? n.position
+        return {
+          ...n,
+          position: savedPosition ?? {
+            x: auto.x + offset.x,
+            y: auto.y + offset.y,
+          },
+        }
+      }),
+      derivedEdges: nextEdges,
+    }
+  }, [steps, triggerLabel, selectedId, triggerPosition, t])
+
+  const displayEdges = savedEdges.length
+    ? savedEdges.map((edge, index) => ({
+        id: `saved-${index}`,
+        source: edge.source_step_id ?? "trigger",
+        target: edge.target_step_id,
+        sourceHandle: edge.source_port || "default",
+        type: "smoothstep",
+        markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
+        style: { stroke: "#94a3b8", strokeWidth: 1.4 },
+      }))
+    : derivedEdges
+
+  useEffect(() => {
+    const sameEdge = (a: BuilderEdge, b: BuilderEdge) =>
+      a.source_step_id === b.source_step_id &&
+      a.source_port === b.source_port &&
+      a.target_step_id === b.target_step_id
+
+    const handler = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (
+        !target ||
+        target.closest(
+          'input, textarea, select, [contenteditable="true"], [contenteditable=""]',
+        ) ||
+        !target.closest('.react-flow')
+      ) {
+        return
+      }
+
+      const mod = event.ctrlKey || event.metaKey
+      const key = event.key.toLowerCase()
+      const materialized: BuilderEdge[] = savedEdges.length
+        ? savedEdges
+        : derivedEdges.map((edge) => ({
+            source_step_id: edge.source === 'trigger' ? null : edge.source,
+            source_port: edge.sourceHandle ?? 'default',
+            target_step_id: edge.target,
+          }))
+
+      if (mod && key === 'v' && edgeClipboardRef.current) {
+        event.preventDefault()
+        const clip = edgeClipboardRef.current
+        const sourceExists =
+          clip.source_step_id === null ||
+          nodes.some((node) => node.id === clip.source_step_id)
+        const targetExists = nodes.some((node) => node.id === clip.target_step_id)
+        if (
+          sourceExists &&
+          targetExists &&
+          !materialized.some((edge) => sameEdge(edge, clip))
+        ) {
+          onEdgesReplace([...materialized, clip])
+        }
+        edgeClipboardRef.current = null
+        setSelectedEdgeId(null)
+        return
+      }
+
+      if (!selectedEdgeId) return
+      const display = savedEdges.length
+        ? savedEdges.map((edge, index) => ({
+            id: 'saved-' + index,
+            edge,
+          }))
+        : derivedEdges.map((edge) => ({
+            id: edge.id,
+            edge: {
+              source_step_id:
+                edge.source === 'trigger' ? null : edge.source,
+              source_port: edge.sourceHandle ?? 'default',
+              target_step_id: edge.target,
+            } satisfies BuilderEdge,
+          }))
+      const selected = display.find((entry) => entry.id === selectedEdgeId)
+      if (!selected) return
+
+      if (key === 'delete' || key === 'backspace') {
+        event.preventDefault()
+        onEdgesReplace(
+          materialized.filter((edge) => !sameEdge(edge, selected.edge)),
+        )
+        setSelectedEdgeId(null)
+        return
+      }
+
+      if (mod && key === 'x') {
+        event.preventDefault()
+        edgeClipboardRef.current = selected.edge
+        onEdgesReplace(
+          materialized.filter((edge) => !sameEdge(edge, selected.edge)),
+        )
+        setSelectedEdgeId(null)
+      }
+    }
+
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [
+    derivedEdges,
+    nodes,
+    onEdgesReplace,
+    savedEdges,
+    selectedEdgeId,
+  ])
+
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<CanvasNode>(nodes)
+
+  useEffect(() => {
+    setFlowNodes(nodes)
+  }, [nodes, setFlowNodes])
+
+  const visualEdges = displayEdges.map((edge) => ({
+    ...edge,
+    animated: draggingNode || ("animated" in edge && edge.animated === true),
+    selected: edge.id === selectedEdgeId,
+    style:
+      edge.id === selectedEdgeId
+        ? { ...edge.style, stroke: "#8b5cf6", strokeWidth: 2.2 }
+        : edge.style,
+  }))
+
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      void fitView({ padding: 0.2, minZoom: 0.8, duration: 250 })
+    }, 60)
+    return () => window.clearTimeout(id)
+  }, [nodes.length, fitView])
+
+  return (
+    <div
+      className={cn(
+        "h-full w-full bg-[#f8fafc] transition-shadow",
+        dragOver && "ring-2 ring-primary/50 ring-inset",
+      )}
+      onDragEnter={() => setDragOver(true)}
+      onDragOver={(event) => {
+        event.preventDefault()
+        setDragOver(true)
+      }}
+      onDragLeave={(event) => {
+        if (event.currentTarget === event.target) setDragOver(false)
+      }}
+      onDrop={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        setDragOver(false)
+        const type = event.dataTransfer.getData(
+          "application/x-automation-step",
+        ) as AutomationStepType
+        if (!ADDABLE_STEPS.includes(type)) return
+        onDropStep(
+          type,
+          screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+        )
+      }}
+    >
+      <ReactFlow
+        nodes={flowNodes}
+        onNodesChange={onNodesChange}
+        edges={visualEdges}
+        nodeTypes={{ automation: AutomationCanvasNode }}
+        onNodeClick={(_, node) => {
+          setSelectedEdgeId(null)
+          const cid = (node.data as AutomationCanvasData).cid
+          if (cid) onSelect(cid)
+        }}
+        onEdgeClick={(_, edge) => {
+          setSelectedEdgeId(edge.id)
+          onClearStepSelection()
+        }}
+        onPaneClick={() => setSelectedEdgeId(null)}
+        onConnect={(connection) => {
+          if (!connection.source || !connection.target) return
+          if (connection.source === connection.target) return
+          const base = savedEdges.length
+            ? savedEdges
+            : derivedEdges.map((edge) => ({
+                source_step_id: edge.source === "trigger" ? null : edge.source,
+                source_port: edge.sourceHandle ?? "default",
+                target_step_id: edge.target,
+              }))
+          onConnect(
+            {
+              source_step_id:
+                connection.source === "trigger" ? null : connection.source,
+              source_port: connection.sourceHandle ?? "default",
+              target_step_id: connection.target,
+            },
+            base,
+          )
+        }}
+        onNodeDragStart={() => setDraggingNode(true)}
+        onNodeDragStop={(_, node) => {
+          setDraggingNode(false)
+          if (node.id === "trigger") {
+            onTriggerPositionChange(node.position.x, node.position.y)
+          } else {
+            onPositionChange(node.id, node.position.x, node.position.y)
+          }
+        }}
+        connectionLineStyle={{ stroke: "#8b5cf6", strokeWidth: 2, strokeDasharray: "6 4" }}
+        fitView
+        fitViewOptions={{ padding: 0.2, minZoom: 0.8, maxZoom: 1 }}
+        minZoom={0.3}
+        maxZoom={1.4}
+        proOptions={{ hideAttribution: true }}
+        className="h-full w-full"
+      >
+        <Background gap={20} size={1.2} color="#cbd5e1" />
+        <Panel position="top-right" className="flex items-center gap-1">
+          <Button variant="outline" size="sm" onClick={() => void zoomOut()}>
+            −
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void fitView({ padding: 0.2, minZoom: 0.8 })}
+            className="border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+          >
+            {t("canvas.fit")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void zoomIn()}
+            className="border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+          >
+            +
+          </Button>
+        </Panel>
+        <Panel
+          position="bottom-left"
+          className="rounded-md border border-slate-200 bg-white/90 px-2.5 py-1.5 text-[11px] text-slate-500"
+        >
+          {t("canvas.dropHint")}
+        </Panel>
+        <MiniMap
+          pannable
+          zoomable
+          nodeColor={(node) => {
+            const data = node.data as AutomationCanvasData | undefined
+            if (data?.type) return STEP_COLOR[data.type]
+            return data?.kind === "trigger" ? "#10b981" : "#94a3b8"
+          }}
+          nodeStrokeWidth={0}
+          nodeBorderRadius={3}
+          maskColor="rgba(248,250,252,0.72)"
+          className="!border-slate-200 !bg-white !rounded-xl !border !shadow-sm"
+        />
+      </ReactFlow>
     </div>
   )
 }
@@ -1114,7 +2542,7 @@ function StepRenderer({
   const meta = STEP_META[step.step_type]
   const Icon = meta.icon
   const expanded = props.expandedId === step.cid
-  const isCondition = step.step_type === "condition"
+  const isCondition = step.step_type === "condition" || step.step_type === "ab_split"
   const nested = basePath.length > 0
   // Card widths on mobile fill the full canvas column (max-w-2xl px-4
   // still keeps them reasonable). On sm+ fixed widths come back so the
@@ -1164,7 +2592,7 @@ function StepRenderer({
             />
           </button>
           {expanded && (
-            <div className="border-t border-border px-4 py-3">
+            <div className="border-t border-border px-4 py-3 xl:hidden">
               <StepEditor
                 step={step}
                 onChange={(next) => props.updateStep(path, () => next)}
@@ -1565,6 +2993,116 @@ function StepEditor({
       )
     case "condition":
       return <ConditionEditor step={step} onChange={onChange} />
+    case "ab_split":
+      return (
+        <p className="text-xs text-muted-foreground">
+          {t("config.abSplitHint")}
+        </p>
+      )
+    case "ask_data":
+      return (
+        <>
+          <FieldBlock label={t("config.askMessage")}>
+            <Textarea
+              value={(cfg.message as string) ?? ""}
+              onChange={(e) => set({ message: e.target.value })}
+              className="min-h-16 bg-muted text-foreground"
+            />
+          </FieldBlock>
+          <FieldBlock label={t("config.askField")}>
+            <ContactFieldSelect
+              value={(cfg.field as string) ?? "name"}
+              onChange={(field) => set({ field })}
+              t={t}
+            />
+          </FieldBlock>
+        </>
+      )
+    case "send_flow":
+      return (
+        <>
+          <FieldBlock label={t("config.flowId")}>
+            <FlowIdInput
+              value={(cfg.flow_id as string) ?? ""}
+              onChange={(flow_id) => set({ flow_id })}
+              t={t}
+            />
+          </FieldBlock>
+          <FieldBlock label={t("config.flowScreen")}>
+            <Input
+              value={(cfg.screen as string) ?? ""}
+              onChange={(e) => set({ screen: e.target.value })}
+              className="bg-muted text-foreground"
+            />
+          </FieldBlock>
+          <FieldBlock label={t("config.flowAction")}>
+            <select
+              value={(cfg.action as string) ?? "navigate"}
+              onChange={(e) => set({ action: e.target.value })}
+              className={SELECT_CLASS}
+            >
+              <option value="navigate">{t("config.flowActionNavigate")}</option>
+              <option value="data_exchange">{t("config.flowActionDataExchange")}</option>
+            </select>
+          </FieldBlock>
+          <FieldBlock label={t("config.flowBody")}>
+            <Textarea
+              value={(cfg.body as string) ?? ""}
+              onChange={(e) => set({ body: e.target.value })}
+              className="min-h-16 bg-muted text-foreground"
+            />
+          </FieldBlock>
+          <FieldBlock label={t("config.flowCta")}>
+            <Input
+              value={(cfg.cta as string) ?? ""}
+              onChange={(e) => set({ cta: e.target.value })}
+              className="bg-muted text-foreground"
+            />
+          </FieldBlock>
+          <FieldBlock label={t("config.flowSaveField")}>
+            <ContactFieldSelect
+              value={(cfg.field as string) ?? ""}
+              onChange={(field) => set({ field })}
+              t={t}
+              allowEmpty
+            />
+          </FieldBlock>
+        </>
+      )
+    case "ask_location":
+      return (
+        <>
+          <FieldBlock label={t("config.locationMessage")}>
+            <Textarea
+              value={(cfg.message as string) ?? ""}
+              onChange={(e) => set({ message: e.target.value })}
+              className="min-h-16 bg-muted text-foreground"
+            />
+          </FieldBlock>
+          <FieldBlock label={t("config.locationField")}>
+            <ContactFieldSelect
+              value={(cfg.field as string) ?? "name"}
+              onChange={(field) => set({ field })}
+              t={t}
+            />
+          </FieldBlock>
+        </>
+      )
+    case "handoff":
+      return (
+        <>
+          <FieldBlock label={t("config.handoffMessage")}>
+            <Textarea
+              value={(cfg.message as string) ?? ""}
+              onChange={(e) => set({ message: e.target.value })}
+              className="min-h-16 bg-muted text-foreground"
+            />
+          </FieldBlock>
+          <p className="text-[11px] text-muted-foreground">
+            {t("config.handoffHint")}
+          </p>
+        </>
+      )
     case "send_webhook":
       return (
         <>
@@ -1640,6 +3178,16 @@ function previewFor(
     }
     case "condition":
       return t("preview.when", { subject: String(step.step_config.subject ?? "?") })
+    case "ab_split":
+      return t("preview.abSplit")
+    case "ask_data":
+      return t("preview.askData")
+    case "send_flow":
+      return t("preview.sendFlow")
+    case "ask_location":
+      return t("preview.askLocation")
+    case "handoff":
+      return t("preview.handoff")
     case "send_webhook":
       return (step.step_config.url as string) || t("preview.noUrl")
     default:
@@ -1655,6 +3203,8 @@ interface ApiStep {
   id?: string
   step_type: string
   step_config: Record<string, unknown>
+  position_x?: number | null
+  position_y?: number | null
   branches?: { yes?: ApiStep[]; no?: ApiStep[] }
 }
 
@@ -1663,6 +3213,8 @@ export function toApiSteps(steps: BuilderStep[]): ApiStep[] {
     ...(s.id ? { id: s.id } : {}),
     step_type: s.step_type,
     step_config: s.step_config,
+    position_x: s.position_x ?? null,
+    position_y: s.position_y ?? null,
     branches: s.branches
       ? { yes: toApiSteps(s.branches.yes), no: toApiSteps(s.branches.no) }
       : undefined,

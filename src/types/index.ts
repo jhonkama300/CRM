@@ -98,6 +98,7 @@ export interface AccountMember {
   email: string | null;
   avatar_url: string | null;
   role: AccountRole;
+  inbox_visibility?: 'account' | 'assigned';
   joined_at: string;
 }
 
@@ -194,6 +195,16 @@ export interface ContactNote {
   created_at: string;
 }
 
+export interface ConversationComment {
+  id: string;
+  account_id: string;
+  conversation_id: string;
+  user_id: string;
+  body: string;
+  mentioned_user_ids?: string[];
+  created_at: string;
+}
+
 export type ConversationStatus = 'open' | 'pending' | 'closed';
 
 /** Why the AI auto-reply bot is paused on a conversation. */
@@ -252,7 +263,8 @@ export interface Conversation {
 export type NotificationType =
   | 'conversation_assigned'
   | 'channel_health'
-  | 'mention';
+  | 'mention'
+  | 'comment_mention';
 
 export interface Notification {
   id: string;
@@ -455,6 +467,8 @@ export interface MessageTemplate {
 export interface Pipeline {
   id: string;
   user_id: string;
+  account_id?: string;
+  channel_id?: string | null;
   name: string;
   created_at: string;
 }
@@ -584,6 +598,11 @@ export type AutomationStepType =
   | 'create_deal'
   | 'wait'
   | 'condition'
+  | 'ab_split'
+  | 'ask_data'
+  | 'send_flow'
+  | 'ask_location'
+  | 'handoff'
   | 'send_webhook'
   | 'close_conversation';
 
@@ -692,6 +711,34 @@ export type ConditionSubject =
   | 'message_content'
   | 'time_of_day';
 
+export interface AskDataStepConfig {
+  message: string;
+  field: string;
+}
+
+export interface SendFlowStepConfig {
+  flow_id: string;
+  flow_token?: string;
+  screen?: string;
+  body: string;
+  header?: string;
+  footer?: string;
+  cta: string;
+  action?: 'navigate' | 'data_exchange';
+  field?: string;
+}
+
+export interface AskLocationStepConfig {
+  message: string;
+  field: string;
+}
+
+export interface HandoffStepConfig {
+  message?: string;
+  mode?: 'round_robin' | 'specific';
+  agent_id?: string;
+}
+
 export interface ConditionStepConfig {
   subject: ConditionSubject;
   /** e.g. field name, tag id, substring, or "HH:mm-HH:mm" depending on subject */
@@ -718,6 +765,10 @@ export type AutomationStepConfig =
   | CreateDealStepConfig
   | WaitStepConfig
   | ConditionStepConfig
+  | HandoffStepConfig
+  | AskDataStepConfig
+  | SendFlowStepConfig
+  | AskLocationStepConfig
   | SendWebhookStepConfig
   | Record<string, never>
   | Record<string, unknown>;

@@ -26,6 +26,7 @@ import { CampaignsCard } from '@/components/dashboard/campaigns-card'
 import { ChannelPerformanceCard } from '@/components/dashboard/channel-performance-card'
 import { KpiRow } from '@/components/dashboard/kpi-row'
 import { MessageVolumeCard } from '@/components/dashboard/message-volume-card'
+import { OperationalAlerts } from '@/components/dashboard/operational-alerts'
 import { OverviewHeader } from '@/components/dashboard/overview-header'
 import { PipelineCard } from '@/components/dashboard/pipeline-card'
 import { ReplyQueueCard } from '@/components/dashboard/reply-queue-card'
@@ -181,6 +182,8 @@ function DashboardPageInner() {
         channelId={channelId}
         onChannelChange={handleChannelChange}
       />
+
+      <OperationalAlerts />
 
       {data && needsSetup(data.setup) ? (
         <SetupChecklist setup={data.setup} />

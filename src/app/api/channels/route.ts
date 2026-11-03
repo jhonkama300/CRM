@@ -4,6 +4,7 @@ import { encrypt } from '@/lib/whatsapp/encryption';
 import { validateChannelCredentials } from '@/lib/whatsapp/channel-validation';
 import { registerPhoneNumber } from '@/lib/whatsapp/meta-api';
 import { explainMetaError } from '@/lib/whatsapp/meta-error-explain';
+import { recordAudit } from '@/lib/audit/log';
 
 function bad(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
@@ -140,6 +141,14 @@ export async function POST(request: Request) {
       .single();
 
     if (error) return bad(error.message, 500);
+    await recordAudit({
+      accountId,
+      actorUserId: userId,
+      action: 'channel.created',
+      entityType: 'channel',
+      entityId: data.id,
+      metadata: { name: data.name, phone_number_id: data.phone_number_id },
+    });
     return NextResponse.json({ channel: data }, { status: 201 });
   } catch (err) {
     return toErrorResponse(err);

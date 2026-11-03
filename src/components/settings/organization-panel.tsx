@@ -83,7 +83,7 @@ const EMPTY_DRAFT: DepartmentDraft = {
 export function OrganizationPanel() {
   const t = useTranslations('Settings.organization');
   const tRoles = useTranslations('Settings.organization.roles');
-  const { accountId } = useAuth();
+  const { accountId, account, user, refreshProfile } = useAuth();
   const canEdit = useCan('edit-settings');
   const supabase = useMemo(() => createClient(), []);
 
@@ -92,6 +92,8 @@ export function OrganizationPanel() {
   const [accountMembers, setAccountMembers] = useState<AccountMember[]>([]);
   const [invitations, setInvitations] = useState<AccountInvitation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [companyName, setCompanyName] = useState('');
+  const [savingCompany, setSavingCompany] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [view, setView] = useState<'canvas' | 'list'>('canvas');
 
@@ -108,6 +110,7 @@ export function OrganizationPanel() {
 
   const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
   const [inviteDepartment, setInviteDepartment] = useState<Department | null>(null);
+  const [companyInviteOpen, setCompanyInviteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -146,6 +149,10 @@ export function OrganizationPanel() {
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (account?.name) setCompanyName(account.name);
+  }, [account?.name]);
 
   const peopleById = useMemo(() => {
     const map = new Map<string, AccountMember>();
@@ -615,6 +622,58 @@ export function OrganizationPanel() {
         )}
       </div>
 
+      {canEdit && (
+        <div className="rounded-xl border border-border bg-card p-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-0 flex-1">
+              <Label htmlFor="company-name">{t('companyNameLabel')}</Label>
+              <Input
+                id="company-name"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                className="mt-1.5 bg-muted text-foreground"
+              />
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                {t('companyNameHint')}
+              </p>
+            </div>
+            <Button
+              type="button"
+              disabled={
+                savingCompany ||
+                !accountId ||
+                !companyName.trim() ||
+                companyName.trim() === (account?.name ?? '')
+              }
+              onClick={async () => {
+                if (!accountId) return;
+                setSavingCompany(true);
+                try {
+                  const { error } = await supabase
+                    .from('accounts')
+                    .update({ name: companyName.trim() })
+                    .eq('id', accountId);
+                  if (error) throw error;
+                  await refreshProfile();
+                  toast.success(t('companyUpdated'));
+                } catch (err) {
+                  toast.error(
+                    err instanceof Error ? err.message : t('saveFailed'),
+                  );
+                } finally {
+                  setSavingCompany(false);
+                }
+              }}
+            >
+              {savingCompany ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : null}
+              {t('saveCompany')}
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-3">
         <Stat label={t('departmentsStat')} value={departments.length} icon={Building2} />
         <Stat label={t('assignedStat')} value={totalMembers} icon={Users} />
@@ -658,6 +717,10 @@ export function OrganizationPanel() {
         </div>
       ) : view === 'canvas' ? (
         <OrganizationCanvas
+          accountName={account?.name ?? t('companyRoot')}
+          totalMembers={accountMembers.length}
+          onInviteCompany={() => setCompanyInviteOpen(true)}
+          currentUserId={user?.id ?? null}
           departments={departments}
           memberships={memberships}
           accountMembers={accountMembers}
@@ -885,9 +948,12 @@ export function OrganizationPanel() {
       </Dialog>
 
       <InviteMemberDialog
-        open={!!inviteDepartment}
+        open={companyInviteOpen || !!inviteDepartment}
         onOpenChange={(open) => {
-          if (!open) setInviteDepartment(null);
+          if (!open) {
+            setCompanyInviteOpen(false);
+            setInviteDepartment(null);
+          }
         }}
         departmentId={inviteDepartment?.id ?? null}
         departmentName={inviteDepartment?.name ?? null}

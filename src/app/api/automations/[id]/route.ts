@@ -6,6 +6,7 @@ import {
   replaceSteps,
   type BuilderStepInput,
 } from '@/lib/automations/steps-tree'
+import { loadEdges, replaceEdges } from '@/lib/automations/edges'
 import {
   validateStepsForActivation,
   validateTriggerForActivation,
@@ -59,7 +60,8 @@ export async function GET(
   if (!automation) return NextResponse.json({ error: t('common.notFound') }, { status: 404 })
 
   const steps = await loadStepsTree(id)
-  return NextResponse.json({ automation, steps })
+  const edges = await loadEdges(id)
+  return NextResponse.json({ automation, steps, edges })
 }
 
 export async function PATCH(
@@ -145,6 +147,10 @@ export async function PATCH(
 
   if (Array.isArray(body.steps)) {
     const err = await replaceSteps(id, body.steps as BuilderStepInput[])
+    if (err) return NextResponse.json({ error: err }, { status: 500 })
+  }
+  if (Array.isArray(body.edges)) {
+    const err = await replaceEdges(id, body.edges)
     if (err) return NextResponse.json({ error: err }, { status: 500 })
   }
 

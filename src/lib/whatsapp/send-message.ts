@@ -403,6 +403,38 @@ export async function sendMessageToConversation(
     }
     if (messageType === 'interactive') {
       const p = interactivePayload!;
+      if (p.kind === 'media') {
+        const buttons = p.buttons ?? [];
+        if (buttons.length > 0) {
+          const result = await sendInteractiveButtons({
+            phoneNumberId: config.phone_number_id,
+            accessToken,
+            to: phone,
+            bodyText: p.body,
+            footerText: p.footer || undefined,
+            buttons,
+            headerMedia: p.header_media,
+            contextMessageId,
+          });
+          return result.messageId;
+        }
+        // No buttons: WhatsApp has no free-form media+footer message, so
+        // send a normal media message and fold the footer into the caption.
+        const caption = [p.body.trim(), p.footer?.trim()]
+          .filter(Boolean)
+          .join('\n\n');
+        const result = await sendMediaMessage({
+          phoneNumberId: config.phone_number_id,
+          accessToken,
+          to: phone,
+          kind: p.header_media.type,
+          link: p.header_media.url,
+          caption: caption || undefined,
+          filename: p.header_media.filename,
+          contextMessageId,
+        });
+        return result.messageId;
+      }
       if (p.kind === 'buttons') {
         const result = await sendInteractiveButtons({
           phoneNumberId: config.phone_number_id,

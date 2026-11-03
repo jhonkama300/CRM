@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   INTERACTIVE_LIMITS,
+  listWhatsAppFlows,
+  sendFlowMessage,
   sendInteractiveButtons,
   sendInteractiveList,
+  sendLocationRequest,
 } from "./meta-api";
 
 // All assertions in this file run BEFORE the network call. We stub fetch
@@ -265,5 +268,152 @@ describe("sendInteractiveList — validation", () => {
         },
       },
     });
+  });
+});
+
+describe("sendFlowMessage", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn(neverFetch));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const FLOW = {
+    ...BASE_ARGS,
+    flowId: "flow-1",
+    flowToken: "conversation-1",
+    flowCta: "Open",
+    screen: "START",
+  } as const;
+
+  it("requires a flow id, token and button text", async () => {
+    await expect(sendFlowMessage({ ...FLOW, flowId: "" })).rejects.toThrow(/Flow ID/);
+    await expect(sendFlowMessage({ ...FLOW, flowToken: "" })).rejects.toThrow(/Flow token/);
+    await expect(sendFlowMessage({ ...FLOW, flowCta: "" })).rejects.toThrow(/button text/);
+  });
+
+  it("requires a screen for navigate flows", async () => {
+    await expect(sendFlowMessage({ ...FLOW, screen: "" })).rejects.toThrow(/Screen name/);
+  });
+
+  it("sends the flow payload", async () => {
+    let captured: Record<string, unknown> | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        captured = JSON.parse(String(init.body));
+        return new Response(JSON.stringify({ messages: [{ id: "wamid.FLOW" }] }), {
+          status: 200,
+        });
+      }),
+    );
+
+    const result = await sendFlowMessage({
+      ...FLOW,
+      headerText: "Form",
+      footerText: "Takes a minute",
+      data: { source: "automation" },
+    });
+
+    expect(result).toEqual({ messageId: "wamid.FLOW" });
+    expect(captured).toMatchObject({
+      type: "interactive",
+      interactive: {
+        type: "flow",
+        body: { text: "Body text" },
+        header: { type: "text", text: "Form" },
+        footer: { text: "Takes a minute" },
+        action: {
+          name: "flow",
+          parameters: {
+            flow_message_version: "3",
+            flow_token: "conversation-1",
+            flow_id: "flow-1",
+            flow_cta: "Open",
+            flow_action: "navigate",
+            flow_action_payload: {
+              screen: "START",
+              data: { source: "automation" },
+            },
+          },
+        },
+      },
+    });
+  });
+});
+
+describe("sendLocationRequest", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn(neverFetch));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("rejects an empty body", async () => {
+    await expect(
+      sendLocationRequest({ ...BASE_ARGS, bodyText: "" }),
+    ).rejects.toThrow(/requires bodyText/);
+  });
+
+  it("sends the location request payload", async () => {
+    let captured: Record<string, unknown> | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        captured = JSON.parse(String(init.body));
+        return new Response(JSON.stringify({ messages: [{ id: "wamid.PIN" }] }), {
+          status: 200,
+        });
+      }),
+    );
+
+    const result = await sendLocationRequest(BASE_ARGS);
+
+    expect(result).toEqual({ messageId: "wamid.PIN" });
+    expect(captured).toMatchObject({
+      type: "interactive",
+      interactive: {
+        type: "location_request_message",
+        body: { text: "Body text" },
+        action: { name: "send_location" },
+      },
+    });
+  });
+});
+
+describe("listWhatsAppFlows", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("follows paging and returns the flow summaries", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        urls.push(url);
+        if (urls.length === 1) {
+          return new Response(
+            JSON.stringify({
+              data: [{ id: "1", name: "Lead form", status: "PUBLISHED" }],
+              paging: { next: "https://graph.test/page-2" },
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(
+          JSON.stringify({ data: [{ id: "2", name: "Survey", status: "DRAFT" }] }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    const flows = await listWhatsAppFlows({ wabaId: "waba-1", accessToken: "token" });
+
+    expect(urls).toHaveLength(2);
+    expect(urls[0]).toContain("waba-1/flows");
+    expect(flows.map((f) => f.name)).toEqual(["Lead form", "Survey"]);
   });
 });

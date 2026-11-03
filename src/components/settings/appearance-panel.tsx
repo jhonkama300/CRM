@@ -6,7 +6,6 @@ import { useTheme } from "@/hooks/use-theme";
 import { MODES, THEMES, type Mode, type ThemeId } from "@/lib/themes";
 import { cn } from "@/lib/utils";
 import { useTranslations } from "next-intl";
-import { SettingsPanelHead } from "./settings-panel-head";
 
 /**
  * Appearance panel — light/dark mode + accent-color picker.
@@ -26,10 +25,6 @@ export function AppearancePanel() {
 
   return (
     <section className="max-w-3xl animate-in fade-in-50 duration-200">
-      <SettingsPanelHead
-        title={t("title")}
-        description={t("description")}
-      />
 
       <div className="space-y-4">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">

@@ -1,4 +1,9 @@
-import { sendTextMessage, sendTemplateMessage } from '@/lib/whatsapp/meta-api'
+import {
+  sendTextMessage,
+  sendTemplateMessage,
+  sendFlowMessage,
+  sendLocationRequest,
+} from '@/lib/whatsapp/meta-api'
 import type { InteractiveMessagePayload } from '@/lib/whatsapp/interactive'
 import {
   engineSendInteractiveButtons,
@@ -99,6 +104,16 @@ export async function engineSendInteractive(
       buttons: payload.buttons,
     })
   }
+  if (payload.kind === 'media') {
+    return engineSendInteractiveButtons({
+      ...common,
+      bodyText: payload.body,
+      headerText: payload.header,
+      footerText: payload.footer,
+      buttons: payload.buttons ?? [],
+      headerMedia: payload.header_media,
+    })
+  }
   return engineSendInteractiveList({
     ...common,
     bodyText: payload.body,
@@ -109,9 +124,47 @@ export async function engineSendInteractive(
   })
 }
 
+interface SendFlowArgs {
+  accountId: string
+  userId: string
+  conversationId: string
+  contactId: string
+  flowId: string
+  flowToken: string
+  flowCta: string
+  bodyText: string
+  headerText?: string
+  footerText?: string
+  screen?: string
+  action?: 'navigate' | 'data_exchange'
+  data?: Record<string, unknown>
+}
+
+interface SendLocationRequestArgs {
+  accountId: string
+  userId: string
+  conversationId: string
+  contactId: string
+  bodyText: string
+}
+
+export async function engineSendFlow(
+  args: SendFlowArgs,
+): Promise<{ whatsapp_message_id: string }> {
+  return sendViaMeta({ ...args, kind: 'flow' })
+}
+
+export async function engineSendLocationRequest(
+  args: SendLocationRequestArgs,
+): Promise<{ whatsapp_message_id: string }> {
+  return sendViaMeta({ ...args, kind: 'location_request' })
+}
+
 type SendInput =
   | (SendTextArgs & { kind: 'text' })
   | (SendTemplateArgs & { kind: 'template' })
+  | (SendFlowArgs & { kind: 'flow' })
+  | (SendLocationRequestArgs & { kind: 'location_request' })
 
 async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: string }> {
   const db = supabaseAdmin()
@@ -186,6 +239,32 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
       })
       return r.messageId
     }
+    if (input.kind === 'flow') {
+      const r = await sendFlowMessage({
+        phoneNumberId: config.phone_number_id,
+        accessToken,
+        to: phone,
+        flowId: input.flowId,
+        flowToken: input.flowToken,
+        flowCta: input.flowCta,
+        bodyText: input.bodyText,
+        headerText: input.headerText,
+        footerText: input.footerText,
+        screen: input.screen,
+        action: input.action,
+        data: input.data,
+      })
+      return r.messageId
+    }
+    if (input.kind === 'location_request') {
+      const r = await sendLocationRequest({
+        phoneNumberId: config.phone_number_id,
+        accessToken,
+        to: phone,
+        bodyText: input.bodyText,
+      })
+      return r.messageId
+    }
     const r = await sendTextMessage({
       phoneNumberId: config.phone_number_id,
       accessToken,
@@ -230,7 +309,9 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
   const content_text =
     input.kind === 'text'
       ? input.text
-      : templateContentText(templateRow, input.params ?? [])
+      : input.kind === 'template'
+        ? templateContentText(templateRow, input.params ?? [])
+        : input.bodyText
   const template_name = input.kind === 'template' ? input.templateName : null
 
   const { error: msgErr } = await db.from('messages').insert({
@@ -255,7 +336,7 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
       last_message_text:
         input.kind === 'template'
           ? (content_text ?? `[template:${input.templateName}]`)
-          : input.text,
+          : content_text,
       last_message_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })

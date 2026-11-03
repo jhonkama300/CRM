@@ -82,6 +82,7 @@ interface Member {
   email: string | null;
   avatar_url: string | null;
   role: AccountRole;
+  inbox_visibility?: 'account' | 'assigned';
   joined_at: string;
 }
 
@@ -222,6 +223,57 @@ export function MembersTab() {
         ),
       );
       console.error('[MembersTab] role change error:', err);
+      toast.error(t('networkError'));
+    } finally {
+      setPendingMemberAction(null);
+    }
+  }
+
+  async function handleInboxVisibilityChange(
+    member: Member,
+    next: 'account' | 'assigned',
+  ) {
+    const previous = member.inbox_visibility ?? 'account';
+    if (previous === next) return;
+    setPendingMemberAction(member.user_id);
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.user_id === member.user_id ? { ...m, inbox_visibility: next } : m,
+      ),
+    );
+    try {
+      const res = await fetch(`/api/account/members/${member.user_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inbox_visibility: next }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        setMembers((prev) =>
+          prev.map((m) =>
+            m.user_id === member.user_id
+              ? { ...m, inbox_visibility: previous }
+              : m,
+          ),
+        );
+        toast.error(payload.error || t('updateInboxVisibilityFailed'));
+        return;
+      }
+      toast.success(
+        t('inboxVisibilityUpdated', {
+          name: member.full_name || t('unnamed'),
+          visibility: t(next === 'assigned' ? 'inboxAssigned' : 'inboxAccount'),
+        }),
+      );
+    } catch (err) {
+      console.error('[MembersTab] inbox visibility error:', err);
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.user_id === member.user_id
+            ? { ...m, inbox_visibility: previous }
+            : m,
+        ),
+      );
       toast.error(t('networkError'));
     } finally {
       setPendingMemberAction(null);
@@ -446,6 +498,37 @@ export function MembersTab() {
                         {tRoles(member.role)}
                       </span>
                     )}
+
+                    {canManageMembers &&
+                      !isOwnerRow &&
+                      (member.role === 'agent' || member.role === 'viewer') && (
+                        <Select
+                          value={member.inbox_visibility ?? 'account'}
+                          onValueChange={(v) =>
+                            v &&
+                            handleInboxVisibilityChange(
+                              member,
+                              v as 'account' | 'assigned',
+                            )
+                          }
+                        >
+                          <SelectTrigger
+                            className="w-36 bg-muted border-border text-foreground"
+                            disabled={isBusy}
+                            title={t('inboxVisibility')}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="account">
+                              {t('inboxAccount')}
+                            </SelectItem>
+                            <SelectItem value="assigned">
+                              {t('inboxAssigned')}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
 
                     {/* Remove. Admin+ only; never on the owner row;
                         never on yourself. Pre-polish styling was

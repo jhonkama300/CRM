@@ -25,6 +25,7 @@ import {
   RATE_LIMITS,
 } from "@/lib/rate-limit";
 import { getT } from "@/lib/i18n/translate";
+import { recordAudit } from "@/lib/audit/log";
 
 const t = getT("Api");
 
@@ -61,35 +62,78 @@ export async function PATCH(
     const { userId } = await params;
 
     const body = (await request.json().catch(() => null)) as
-      | { role?: unknown }
+      | { role?: unknown; inbox_visibility?: unknown }
       | null;
     const role = body?.role;
+    const visibility = body?.inbox_visibility;
 
-    if (!isAccountRole(role)) {
+    if (role === undefined && visibility === undefined) {
       return NextResponse.json(
         { error: t('account.members.roleInvalid') },
         { status: 400 },
       );
     }
 
-    // The RPC blocks promotion to / demotion from owner, but
-    // surface the friendlier 400 before crossing the wire too.
-    if (role === "owner") {
-      return NextResponse.json(
-        {
-          error:
-            t('account.members.useTransferOwnership'),
-        },
-        { status: 400 },
-      );
+    if (role !== undefined) {
+      if (!isAccountRole(role)) {
+        return NextResponse.json(
+          { error: t('account.members.roleInvalid') },
+          { status: 400 },
+        );
+      }
+
+      // The RPC blocks promotion to / demotion from owner, but
+      // surface the friendlier 400 before crossing the wire too.
+      if (role === "owner") {
+        return NextResponse.json(
+          {
+            error:
+              t('account.members.useTransferOwnership'),
+          },
+          { status: 400 },
+        );
+      }
+
+      const { error } = await ctx.supabase.rpc("set_member_role", {
+        p_user_id: userId,
+        p_new_role: role,
+      });
+
+      if (error) return rpcErrorToResponse(error);
+      await recordAudit({
+        accountId: ctx.accountId,
+        actorUserId: ctx.userId,
+        action: "member.role_changed",
+        entityType: "member",
+        entityId: userId,
+        metadata: { role },
+      });
     }
 
-    const { error } = await ctx.supabase.rpc("set_member_role", {
-      p_user_id: userId,
-      p_new_role: role,
-    });
-
-    if (error) return rpcErrorToResponse(error);
+    if (visibility !== undefined) {
+      if (visibility !== "account" && visibility !== "assigned") {
+        return NextResponse.json(
+          { error: "Invalid inbox visibility" },
+          { status: 400 },
+        );
+      }
+      const { error } = await ctx.supabase.rpc(
+        "set_member_inbox_visibility",
+        {
+          p_user_id: userId,
+          p_visibility: visibility,
+        },
+      );
+      if (error) return rpcErrorToResponse(error);
+      await recordAudit({
+        accountId: ctx.accountId,
+        actorUserId: ctx.userId,
+        action: "member.inbox_visibility_changed",
+        entityType: "member",
+        entityId: userId,
+        metadata: { visibility },
+      });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {

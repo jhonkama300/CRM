@@ -1,14 +1,14 @@
 "use client";
 
 import type { Deal, PipelineStage } from "@/types";
-import { Calendar, Check, X } from "lucide-react";
-import { formatCurrency } from "@/lib/currency";
+import { Calendar, Check, MessageCircle, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 interface DealCardProps {
   deal: Deal;
   stage: PipelineStage | null;
   onEdit: (deal: Deal) => void;
+  onOpenChat?: (deal: Deal) => void;
   isOverlay?: boolean;
 }
 
@@ -26,20 +26,34 @@ function initials(name?: string, fallback?: string) {
   return source.charAt(0).toUpperCase();
 }
 
-export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
+export function DealCard({
+  deal,
+  stage,
+  onEdit,
+  onOpenChat,
+  isOverlay,
+}: DealCardProps) {
   const t = useTranslations("Pipelines.card");
   const contactLabel = deal.contact?.name || deal.contact?.phone || t("noContact");
   const assigneeLabel = deal.assignee?.full_name || null;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={isOverlay ? -1 : 0}
       onClick={(e) => {
         // `onClick` still fires after a non-drag tap because the PointerSensor
         // requires 5px movement before it counts as a drag.
         if (isOverlay) return;
         e.stopPropagation();
         onEdit(deal);
+      }}
+      onKeyDown={(e) => {
+        if (isOverlay) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onEdit(deal);
+        }
       }}
       className={`group relative w-full cursor-pointer rounded-xl border border-border/50 bg-muted/70 pl-4 pr-3 py-3 text-left shadow-sm transition-all ${
         isOverlay
@@ -80,10 +94,24 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
         <span className="truncate text-xs text-muted-foreground">{contactLabel}</span>
       </div>
 
-      <div className="mt-2 flex items-center justify-between">
-        <span className="text-sm font-bold text-primary">
-          {formatCurrency(deal.value, deal.currency)}
-        </span>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        {onOpenChat && !isOverlay ? (
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenChat(deal);
+            }}
+            title={t("openChat")}
+            aria-label={t("openChat")}
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+          >
+            <MessageCircle className="h-3.5 w-3.5" />
+          </button>
+        ) : (
+          <span />
+        )}
         {deal.expected_close_date && (
           <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <Calendar className="h-3 w-3" />
@@ -102,6 +130,6 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
           </span>
         </div>
       )}
-    </button>
+    </div>
   );
 }

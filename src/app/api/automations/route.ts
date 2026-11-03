@@ -4,6 +4,7 @@ import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { getTemplate } from '@/lib/automations/templates'
 import { insertSteps, type BuilderStepInput } from '@/lib/automations/steps-tree'
+import { replaceEdges } from '@/lib/automations/edges'
 import {
   validateStepsForActivation,
   validateTriggerForActivation,
@@ -131,6 +132,10 @@ export async function POST(request: Request) {
 
   if (effectiveSteps && effectiveSteps.length > 0) {
     const err = await insertSteps(automation.id, effectiveSteps)
+    if (err) return NextResponse.json({ error: err }, { status: 500 })
+  }
+  if (Array.isArray(body.edges) && body.edges.length > 0) {
+    const err = await replaceEdges(automation.id, body.edges)
     if (err) return NextResponse.json({ error: err }, { status: 500 })
   }
 

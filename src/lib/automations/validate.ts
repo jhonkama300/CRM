@@ -100,6 +100,36 @@ function validateOne(step: StepLike, path: string, issues: ValidationIssue[]): v
         issues.push({ path: `${path}.value`, message: t('fieldValueRequired') })
       }
       break
+    case 'ask_data':
+      if (!nonEmpty(c.message)) {
+        issues.push({ path: `${path}.message`, message: t('messageTextRequired') })
+      }
+      if (!nonEmpty(c.field)) {
+        issues.push({ path: `${path}.field`, message: t('fieldNameRequired') })
+      }
+      break
+    case 'ask_location':
+      if (!nonEmpty(c.message)) {
+        issues.push({ path: `${path}.message`, message: t('messageTextRequired') })
+      }
+      if (!nonEmpty(c.field)) {
+        issues.push({ path: `${path}.field`, message: t('fieldNameRequired') })
+      }
+      break
+    case 'send_flow':
+      if (!nonEmpty(c.flow_id)) {
+        issues.push({ path: `${path}.flow_id`, message: t('flowIdRequired') })
+      }
+      if (!nonEmpty(c.body)) {
+        issues.push({ path: `${path}.body`, message: t('messageTextRequired') })
+      }
+      if (!nonEmpty(c.cta)) {
+        issues.push({ path: `${path}.cta`, message: t('flowCtaRequired') })
+      }
+      if ((c.action ?? 'navigate') === 'navigate' && !nonEmpty(c.screen)) {
+        issues.push({ path: `${path}.screen`, message: t('flowScreenRequired') })
+      }
+      break
     case 'create_deal':
       if (!nonEmpty(c.pipeline_id)) {
         issues.push({ path: `${path}.pipeline_id`, message: t('pipelineRequired') })
@@ -157,7 +187,9 @@ function validateOne(step: StepLike, path: string, issues: ValidationIssue[]): v
       }
       break
     case 'close_conversation':
-      // No config required.
+    case 'handoff':
+    case 'ab_split':
+      // No required config.
       break
     default:
       issues.push({ path, message: t('unknownStepType', { type: step.step_type }) })

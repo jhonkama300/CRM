@@ -33,6 +33,7 @@ import {
   isTemplateWebhookField,
 } from '@/lib/whatsapp/template-webhook'
 import { applyMessageStatus } from '@/lib/whatsapp/message-status-sync'
+import { ensureChannelDeal } from '@/lib/pipelines/auto-deal'
 
 // The `after()` callback in POST runs within this route's max duration.
 // Inbound processing can fan out to per-media Meta verification calls, so
@@ -84,9 +85,14 @@ interface WhatsAppMessage {
    * to advance the per-contact run.
    */
   interactive?: {
-    type: 'button_reply' | 'list_reply'
+    type: 'button_reply' | 'list_reply' | 'flow_reply'
     button_reply?: { id: string; title: string }
     list_reply?: { id: string; title: string; description?: string }
+    nfm_reply?: {
+      name?: string
+      body?: string
+      response_json?: string
+    }
   }
   /**
    * Set when the customer taps a QUICK_REPLY button on a *template*
@@ -670,13 +676,33 @@ async function processMessage(
     return
   }
 
+  try {
+    await ensureChannelDeal({
+      accountId,
+      userId: configOwnerUserId,
+      contactId: contactRecord.id,
+      conversationId: conversation.id,
+      channelId,
+      contactName: contactRecord.name,
+      contactPhone: contactRecord.phone,
+    })
+  } catch (err) {
+    console.error('[webhook] auto deal creation failed:', err)
+  }
+
   // Parse message content based on type
   const parsedContent = await parseMessageContent(
     message,
     accessToken,
     mirrorMedia ? { accountId } : null
   )
-  const { mediaUrl, mediaType, interactiveReplyId } = parsedContent
+  const {
+    mediaUrl,
+    mediaType,
+    interactiveReplyId,
+    location: messageLocation,
+    flowResponse,
+  } = parsedContent
   let contentText = parsedContent.contentText
 
   // Voice notes: transcribe before the row is inserted so the transcript
@@ -851,26 +877,28 @@ async function processMessage(
   // no active flows take the runner's early-exit "no_match" path
   // basically for free (one indexed SELECT for the active run).
   // ============================================================
-  const flowResult = await dispatchInboundToFlows({
-    accountId,
-    userId: configOwnerUserId,
-    contactId: contactRecord.id,
-    conversationId: conversation.id,
-    message:
-      interactiveReplyId
-        ? {
-            kind: 'interactive_reply',
-            reply_id: interactiveReplyId,
-            reply_title: contentText ?? '',
-            meta_message_id: message.id,
-          }
-        : {
-            kind: 'text',
-            text: contentText ?? message.text?.body ?? '',
-            meta_message_id: message.id,
-          },
-    isFirstInboundMessage,
-  })
+  const flowResult = flowResponse || messageLocation
+    ? { consumed: false }
+    : await dispatchInboundToFlows({
+        accountId,
+        userId: configOwnerUserId,
+        contactId: contactRecord.id,
+        conversationId: conversation.id,
+        message:
+          interactiveReplyId
+            ? {
+                kind: 'interactive_reply',
+                reply_id: interactiveReplyId,
+                reply_title: contentText ?? '',
+                meta_message_id: message.id,
+              }
+            : {
+                kind: 'text',
+                text: contentText ?? message.text?.body ?? '',
+                meta_message_id: message.id,
+              },
+        isFirstInboundMessage,
+      })
   const flowConsumed = flowResult.consumed
 
   // Fire any automations that react to this webhook event. All dispatches
@@ -897,6 +925,8 @@ async function processMessage(
           message_text: inboundText,
           conversation_id: conversation.id,
           interactive_reply_id: interactiveReplyId ?? undefined,
+          message_location: messageLocation ?? undefined,
+          flow_response: flowResponse ?? undefined,
         },
       })
   const contentConsumed = flowConsumed || automationConsumed
@@ -947,6 +977,8 @@ async function processMessage(
         // Only set on interactive taps; drives the interactive_reply
         // trigger's exact-id match.
         interactive_reply_id: interactiveReplyId ?? undefined,
+        message_location: messageLocation ?? undefined,
+        flow_response: flowResponse ?? undefined,
       },
     }).catch((err) => console.error('[automations] dispatch failed:', err))
   }
@@ -956,7 +988,13 @@ async function processMessage(
   // the account has enabled it. Awaited inside `after()` (same reason as
   // the webhook dispatch below); `dispatchInboundToAiReply` owns its
   // eligibility gates + try/catch and never throws.
-  if (!contentConsumed && !interactiveReplyId && inboundText.trim()) {
+  if (
+    !contentConsumed &&
+    !interactiveReplyId &&
+    !flowResponse &&
+    !messageLocation &&
+    inboundText.trim()
+  ) {
     await dispatchInboundToAiReply({
       accountId,
       conversationId: conversation.id,
@@ -1002,6 +1040,13 @@ async function parseMessageContent(
    * tap with the right affordance. Null for everything else.
    */
   interactiveReplyId: string | null
+  location: {
+    latitude: number
+    longitude: number
+    name?: string
+    address?: string
+  } | null
+  flowResponse: unknown
 }> {
   // getMediaUrl signature is (mediaId, accessToken) — earlier code had
   // the args swapped, so every verification hit an invalid Meta URL and
@@ -1059,6 +1104,8 @@ async function parseMessageContent(
     mediaUrl: null,
     mediaType: null,
     interactiveReplyId: null,
+    location: null,
+    flowResponse: null,
   }
 
   switch (message.type) {
@@ -1134,7 +1181,7 @@ async function parseMessageContent(
         const locationText = [loc.name, loc.address, `${loc.latitude},${loc.longitude}`]
           .filter(Boolean)
           .join(' - ')
-        return { ...empty, contentText: locationText }
+        return { ...empty, contentText: locationText, location: loc }
       }
       return empty
 
@@ -1148,6 +1195,22 @@ async function parseMessageContent(
       // Use the human-readable title as contentText so the inbox bubble
       // renders the tap legibly ("Existing customer"), and stash the
       // stable id separately so the Flows engine can route on it.
+      const flow = message.interactive?.nfm_reply
+      if (flow) {
+        let response: unknown = flow.response_json ?? null
+        if (typeof flow.response_json === 'string') {
+          try {
+            response = JSON.parse(flow.response_json)
+          } catch {
+            response = flow.response_json
+          }
+        }
+        return {
+          ...empty,
+          contentText: flow.body || '[Flow response]',
+          flowResponse: response,
+        }
+      }
       const reply =
         message.interactive?.button_reply ?? message.interactive?.list_reply
       if (reply?.id) {

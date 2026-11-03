@@ -149,8 +149,8 @@ BEGIN
       'a public column default still calls uuid-ossp; use gen_random_uuid() so a fresh hosted db push does not hit 42883';
   END IF;
 
-  IF to_regprocedure('public.dashboard_overview(integer,text)') IS NULL THEN
-    RAISE EXCEPTION 'public.dashboard_overview(integer, text) is missing — migration 059 did not apply';
+  IF to_regprocedure('public.dashboard_overview(integer,text,uuid)') IS NULL THEN
+    RAISE EXCEPTION 'public.dashboard_overview(integer, text, uuid) is missing - migration 072 did not apply';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'messages_track_conversation_times') THEN
     RAISE EXCEPTION 'messages_track_conversation_times trigger is missing — migration 059 did not apply';
@@ -159,8 +159,8 @@ BEGIN
      OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'deals_stamp_closed_at') THEN
     RAISE EXCEPTION 'closed_at triggers are missing — migration 059 did not apply';
   END IF;
-  IF has_function_privilege('anon', 'public.dashboard_overview(integer,text)', 'EXECUTE') THEN
-    RAISE EXCEPTION 'anon can execute dashboard_overview - migration 059 grants are wrong';
+  IF has_function_privilege('anon', 'public.dashboard_overview(integer,text,uuid)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'anon can execute dashboard_overview - migration 072 grants are wrong';
   END IF;
 
   -- 060 adds the inbox banner's reason fields. A typo'd column here
@@ -307,6 +307,16 @@ BEGIN
     RAISE EXCEPTION
       'redeem_invitation does not guard channel data - migration 073 did not apply';
   END IF;
+  IF pg_get_functiondef('public.redeem_invitation(text)'::regprocedure)
+       NOT LIKE '%FROM audit_logs WHERE account_id = v_old_account_id%' THEN
+    RAISE EXCEPTION
+      'redeem_invitation does not guard audit data - migration 080 did not apply';
+  END IF;
+  IF pg_get_functiondef('public.redeem_invitation(text)'::regprocedure)
+       NOT LIKE '%FROM conversation_comments WHERE account_id = v_old_account_id%' THEN
+    RAISE EXCEPTION
+      'redeem_invitation does not guard conversation comments - migration 086 did not apply';
+  END IF;
 
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
@@ -330,6 +340,85 @@ BEGIN
      ) THEN
     RAISE EXCEPTION
       'authenticated can execute notify_contact_note_mentions - migration 075 grants are wrong';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'profiles'
+      AND column_name = 'inbox_visibility'
+  ) OR to_regprocedure('public.has_full_inbox_access(uuid)') IS NULL
+     OR to_regprocedure('public.set_member_inbox_visibility(uuid,text)') IS NULL THEN
+    RAISE EXCEPTION
+      'private inbox helpers are missing - migration 076 did not apply';
+  END IF;
+  IF pg_get_functiondef(
+       'public.dashboard_overview(integer,text,uuid)'::regprocedure
+     ) NOT LIKE '%v_full_inbox%' THEN
+    RAISE EXCEPTION
+      'dashboard_overview does not respect inbox visibility - migration 077 did not apply';
+  END IF;
+
+  IF to_regclass('public.audit_logs') IS NULL OR NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'audit_logs'
+      AND policyname = 'audit_logs_select'
+  ) THEN
+    RAISE EXCEPTION
+      'audit_logs table/policy is missing - migration 078 did not apply';
+  END IF;
+
+  IF to_regprocedure('public.user_in_department_chain(uuid,uuid)') IS NULL
+     OR NOT EXISTS (
+       SELECT 1 FROM pg_trigger
+       WHERE tgname = 'conversations_assignee_area'
+     ) THEN
+    RAISE EXCEPTION
+      'area assignee enforcement is missing - migration 083 did not apply';
+  END IF;
+
+  IF to_regclass('public.conversation_comments') IS NULL
+     OR NOT EXISTS (
+       SELECT 1 FROM pg_trigger
+       WHERE tgname = 'on_conversation_comment_mentions'
+     ) THEN
+    RAISE EXCEPTION
+      'conversation comments are missing - migration 084 did not apply';
+  END IF;
+  IF pg_get_constraintdef(
+       (SELECT oid FROM pg_constraint
+        WHERE conname = 'notifications_type_check')
+     ) NOT LIKE '%comment_mention%' THEN
+    RAISE EXCEPTION
+      'notifications_type_check does not allow comment_mention - migration 084 did not apply';
+  END IF;
+
+  IF pg_get_functiondef(
+       'public.dashboard_overview(integer,text,uuid)'::regprocedure
+     ) NOT LIKE '%hasChannel%' THEN
+    RAISE EXCEPTION
+      'dashboard setup fields are missing - migration 085 did not apply';
+  END IF;
+
+  IF (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'automation_steps'
+      AND column_name IN ('position_x', 'position_y')
+  ) <> 2 THEN
+    RAISE EXCEPTION
+      'automation_steps position columns are missing - migration 087 did not apply';
+  END IF;
+
+  IF to_regclass('public.automation_edges') IS NULL THEN
+    RAISE EXCEPTION 'public.automation_edges is missing - migration 089 did not apply';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'pipelines'
+      AND column_name = 'channel_id'
+  ) THEN
+    RAISE EXCEPTION
+      'pipelines.channel_id is missing - migration 092 did not apply';
   END IF;
 
   RAISE NOTICE 'schema verification passed';

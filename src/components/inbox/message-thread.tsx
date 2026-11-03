@@ -301,28 +301,43 @@ export function MessageThread({
     messageId: string;
   } | null>(null);
 
-  // Profiles are bounded by RLS to rows the current user is allowed to
-  // see — today that's just the current user, but the dropdown keeps the
-  // shape ready for shared-team workspaces without a refactor.
+  // Eligible assignees are scoped to the channel area by the API, so
+  // the dropdown cannot offer somebody who would be rejected by the
+  // database trigger. Conversations without a channel keep every member.
   useEffect(() => {
     let cancelled = false;
-    const supabase = createClient();
-    supabase
-      .from("profiles")
-      .select("*")
-      .order("full_name")
-      .then(({ data, error }) => {
+    const convId = conversation?.id;
+    if (!convId) {
+      setProfiles([]);
+      return;
+    }
+    fetch(`/api/inbox/conversations/${convId}/assignees`, {
+      cache: "no-store",
+    })
+      .then((res) => (res.ok ? res.json() : { members: [] }))
+      .then((body: { members?: Array<Record<string, unknown>> }) => {
         if (cancelled) return;
-        if (error) {
-          console.error("Failed to fetch profiles:", error);
-          return;
-        }
-        setProfiles((data as Profile[]) ?? []);
+        setProfiles(
+          (body.members ?? []).map((m) => ({
+            id: m.user_id,
+            user_id: m.user_id,
+            full_name: m.full_name ?? "",
+            email: m.email ?? "",
+            avatar_url: m.avatar_url ?? undefined,
+            role: "",
+            account_id: "",
+            account_role: m.role,
+            joined_at: m.joined_at,
+          })) as unknown as Profile[],
+        );
+      })
+      .catch((error) => {
+        if (!cancelled) console.error("Failed to fetch assignees:", error);
       });
     return () => {
       cancelled = true;
     };
-  }, [profilesVersion]);
+  }, [profilesVersion, conversation?.id]);
 
   // 24-hour session timer
   const sessionInfo = useMemo(() => {
@@ -1197,7 +1212,7 @@ export function MessageThread({
     // clipped and the hover toolbar overlaps the Tags panel. Letting the
     // root shrink lets the bubbles' break-words / max-w caps apply.
     // Issue #257.
-    <div className={cn("flex min-w-0 flex-1 flex-col", DOODLE_BG_CLASSES)}>
+    <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col", DOODLE_BG_CLASSES)}>
       {/* Header — solid card surface sits on top of the doodle so the
           name/avatar/dropdowns stay legible. */}
       <div className="flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-3 sm:px-4">

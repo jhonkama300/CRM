@@ -11,7 +11,6 @@ import {
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
-  Bell,
   Bot,
   CornerDownLeft,
   FileText,
@@ -34,11 +33,10 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   SETTINGS_SECTIONS,
   SECTION_META,
@@ -110,7 +108,6 @@ const EMPTY_RESULTS: SearchResults = {
 const NAV_ITEMS: { labelKey: string; href: string; icon: LucideIcon }[] = [
   { labelKey: "dashboard", href: "/dashboard", icon: LayoutDashboard },
   { labelKey: "inbox", href: "/inbox", icon: MessageSquare },
-  { labelKey: "notifications", href: "/notifications", icon: Bell },
   { labelKey: "contacts", href: "/contacts", icon: Users },
   { labelKey: "pipelines", href: "/pipelines", icon: GitBranch },
   { labelKey: "broadcasts", href: "/broadcasts", icon: Radio },
@@ -153,10 +150,11 @@ function firstRelated<T>(value: T | T[] | null | undefined): T | null {
   return value ?? null;
 }
 
-export function CommandPalette() {
+export function GlobalSearch() {
   const router = useRouter();
   const { accountId } = useAuth();
   const t = useTranslations("CommandPalette");
+  const tHeader = useTranslations("Header");
   const tNav = useTranslations("Sidebar");
   const tSettings = useTranslations("Settings.sections");
 
@@ -169,7 +167,7 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const activeItemRef = useRef<HTMLButtonElement>(null);
 
-  // Global keyboard shortcut + the header's visible trigger.
+  // The header field owns the trigger; Cmd/Ctrl+K just opens it.
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (
@@ -180,13 +178,8 @@ export function CommandPalette() {
         setOpen((prev) => !prev);
       }
     };
-    const onOpen = () => setOpen(true);
     window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("wacrm:command-palette", onOpen);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("wacrm:command-palette", onOpen);
-    };
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
   useEffect(() => {
@@ -431,7 +424,7 @@ export function CommandPalette() {
   let itemIndex = -1;
 
   return (
-    <Dialog
+    <Popover
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
@@ -442,15 +435,22 @@ export function CommandPalette() {
         }
       }}
     >
-      <DialogContent
-        showCloseButton={false}
-        className="top-[12%] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-xl"
+      <PopoverTrigger
+        aria-label={tHeader("search")}
+        className="inline-flex h-10 w-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-border bg-card px-0 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-popup-open:bg-muted md:w-[240px] md:justify-start md:px-3 lg:w-[320px] xl:w-[360px]"
       >
-        <DialogTitle className="sr-only">{t("title")}</DialogTitle>
-        <DialogDescription className="sr-only">
-          {t("placeholder")}
-        </DialogDescription>
+        <Search className="h-4 w-4 shrink-0" />
+        <span className="hidden truncate md:inline">{tHeader("search")}</span>
+        <kbd className="ml-auto hidden shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium md:inline">
+          ⌘K
+        </kbd>
+      </PopoverTrigger>
 
+      <PopoverContent
+        align="end"
+        sideOffset={6}
+        className="w-[min(92vw,560px)] gap-0 overflow-hidden p-0"
+      >
         <div className="flex items-center gap-2 border-b border-border px-3">
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
           <input
@@ -567,7 +567,7 @@ export function CommandPalette() {
             {t("hints.close")}
           </span>
         </div>
-      </DialogContent>
-    </Dialog>
+      </PopoverContent>
+    </Popover>
   );
 }

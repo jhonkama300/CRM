@@ -68,9 +68,34 @@ export interface InteractiveListPayload {
   sections: InteractiveListSection[]
 }
 
+export interface InteractiveHeaderMedia {
+  type: 'image' | 'video' | 'document'
+  /** Public HTTPS URL Meta can fetch at send time. */
+  url: string
+  /** Shown to the recipient for document headers. */
+  filename?: string
+}
+
+/**
+ * A media header with body/footer and optional reply buttons. Used by
+ * media quick replies. With no buttons the send core falls back to a
+ * normal media message (caption = body + footer).
+ */
+export interface InteractiveMediaPayload {
+  kind: 'media'
+  body: string
+  /** Kept for the shared builder structure; media headers ignore it. */
+  header?: string
+  footer?: string
+  header_media: InteractiveHeaderMedia
+  /** 0-3 reply buttons. */
+  buttons?: InteractiveButton[]
+}
+
 export type InteractiveMessagePayload =
   | InteractiveButtonsPayload
   | InteractiveListPayload
+  | InteractiveMediaPayload
 
 export type InteractiveValidation =
   | { ok: true }
@@ -125,6 +150,42 @@ export function validateInteractivePayload(
       `Body text exceeds the ${INTERACTIVE_LIMITS.bodyMaxLength}-character limit.`,
     )
   }
+  if (p.kind === 'media') {
+    const media = p as InteractiveMediaPayload
+    const header = media.header_media
+    if (!header || !['image', 'video', 'document'].includes(header.type)) {
+      return fail('Media header type must be image, video, or document.')
+    }
+    if (typeof header.url !== 'string' || !/^https?:\/\//i.test(header.url)) {
+      return fail('Media header needs a public http(s) URL.')
+    }
+    const hf = validateHeaderFooter(undefined, media.footer)
+    if (!hf.ok) return hf
+    const buttons = media.buttons ?? []
+    if (buttons.length > INTERACTIVE_LIMITS.maxButtons) {
+      return fail(
+        `A media message allows at most ${INTERACTIVE_LIMITS.maxButtons} buttons.`,
+      )
+    }
+    const seen = new Set<string>()
+    for (const b of buttons) {
+      if (!b || typeof b.id !== 'string' || b.id.trim() === '') {
+        return fail('Every button needs an id.')
+      }
+      if (seen.has(b.id)) return fail(`Duplicate button id "${b.id}".`)
+      seen.add(b.id)
+      if (typeof b.title !== 'string' || b.title.trim() === '') {
+        return fail('Every button needs a label.')
+      }
+      if (b.title.length > INTERACTIVE_LIMITS.buttonTitleMaxLength) {
+        return fail(
+          `Button label "${b.title}" exceeds the ${INTERACTIVE_LIMITS.buttonTitleMaxLength}-character limit.`,
+        )
+      }
+    }
+    return ok()
+  }
+
   const hf = validateHeaderFooter(p.header, p.footer)
   if (!hf.ok) return hf
 
@@ -235,5 +296,6 @@ export function interactivePayloadPreviewText(
 ): string {
   const body = payload.body?.trim()
   if (body) return body
+  if (payload.kind === 'media') return '[media]'
   return payload.kind === 'buttons' ? '[buttons]' : '[list]'
 }

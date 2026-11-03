@@ -104,15 +104,17 @@ export function BrowserNotificationsCard({ className }: { className?: string }) 
         : 'statusDefault';
 
   return (
-    <Card className={className}>
+    <Card size="sm" className={className}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-foreground">
           <Bell className="size-4 text-muted-foreground" />
           {t('title')}
         </CardTitle>
-        <CardDescription>{t('description')}</CardDescription>
+        <CardDescription className="text-xs">
+          {t('description')}
+        </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-2.5">
         {!supported ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
             <CircleAlert className="size-4 shrink-0" />
@@ -120,12 +122,14 @@ export function BrowserNotificationsCard({ className }: { className?: string }) 
           </p>
         ) : (
           <>
-            <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-border px-3 py-2">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">
                   {t('toggleLabel')}
                 </p>
-                <p className="text-xs text-muted-foreground">{t('toggleDesc')}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t('toggleDesc')}
+                </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {requesting && (
@@ -140,8 +144,6 @@ export function BrowserNotificationsCard({ className }: { className?: string }) 
               </div>
             </div>
 
-            <p className="text-xs text-muted-foreground">{t(statusKey)}</p>
-
             {permission === 'denied' && (
               <p className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
                 <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
@@ -149,16 +151,19 @@ export function BrowserNotificationsCard({ className }: { className?: string }) 
               </p>
             )}
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={sendTest}
-              disabled={!checked}
-            >
-              <BellRing className="size-4" />
-              {t('sendTest')}
-            </Button>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">{t(statusKey)}</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={sendTest}
+                disabled={!checked}
+              >
+                <BellRing className="size-4" />
+                {t('sendTest')}
+              </Button>
+            </div>
           </>
         )}
       </CardContent>

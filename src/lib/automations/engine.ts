@@ -17,11 +17,21 @@ import type {
   WaitStepConfig,
   CreateDealStepConfig,
   AssignConversationStepConfig,
+  HandoffStepConfig,
+  AskDataStepConfig,
+  SendFlowStepConfig,
+  AskLocationStepConfig,
 } from '@/types'
 import { supabaseAdmin } from './admin-client'
 import { addContactTagIfAbsent } from '@/lib/contacts/tag-write'
 import { MAX_TAG_CHAIN_DEPTH, getTagChainDepth } from '@/lib/contacts/tag-chain'
-import { engineSendText, engineSendTemplate, engineSendInteractive } from './meta-send'
+import {
+  engineSendText,
+  engineSendTemplate,
+  engineSendInteractive,
+  engineSendFlow,
+  engineSendLocationRequest,
+} from './meta-send'
 import { validateInteractivePayload } from '@/lib/whatsapp/interactive'
 import { isDeliverableUrl } from '@/lib/webhooks/ssrf'
 import { getT } from '@/lib/i18n/translate'
@@ -47,6 +57,15 @@ export interface AutomationContext {
   agent_id?: string
   /** Button / list-row id the customer tapped, for interactive_reply. */
   interactive_reply_id?: string
+  /** Raw location shared by the customer in reply to a location request. */
+  message_location?: {
+    latitude: number
+    longitude: number
+    name?: string
+    address?: string
+  }
+  /** Structured response returned by a WhatsApp Flow. */
+  flow_response?: unknown
 }
 
 export interface DispatchInput {
@@ -153,6 +172,130 @@ export async function runAutomationsForTrigger(input: DispatchInput): Promise<vo
  * Resume a run that was parked at a wait step. Called from the cron
  * endpoint after it grabs a due `automation_pending_executions` row.
  */
+async function captureAskDataReply(args: {
+  automation: Automation
+  pending: { contact_id: string | null; parked_step_id?: string | null }
+  context: AutomationContext
+}): Promise<void> {
+  const parkedId = args.pending.parked_step_id
+  if (!parkedId || !args.pending.contact_id) return
+  const { data: step } = await supabaseAdmin()
+    .from('automation_steps')
+    .select('step_type, step_config')
+    .eq('id', parkedId)
+    .eq('automation_id', args.automation.id)
+    .maybeSingle()
+  if (!step) return
+
+  let field = ''
+  let value = ''
+  if (step.step_type === 'ask_data') {
+    const cfg = step.step_config as AskDataStepConfig
+    field = cfg.field
+    value = args.context.message_text?.trim() ?? ''
+  } else if (step.step_type === 'ask_location') {
+    const cfg = step.step_config as AskLocationStepConfig
+    const location = args.context.message_location
+    field = cfg.field
+    value = location ? `${location.latitude},${location.longitude}` : ''
+  } else if (step.step_type === 'send_flow') {
+    const cfg = step.step_config as SendFlowStepConfig
+    field = cfg.field ?? ''
+    value =
+      args.context.flow_response === undefined
+        ? ''
+        : JSON.stringify(args.context.flow_response)
+  } else {
+    return
+  }
+  if (!field || !value) return
+
+  await runStep(
+    {
+      id: parkedId,
+      parent_step_id: null,
+      branch: null,
+      position: 0,
+      step_type: 'update_contact_field',
+      step_config: { field, value },
+      created_at: new Date().toISOString(),
+    } as AutomationStep,
+    {
+      automation: args.automation,
+      contactId: args.pending.contact_id,
+      context: args.context,
+      parentStepId: null,
+      branch: null,
+      startPosition: 0,
+      logId: null,
+      triggerEvent: 'resumed_reply',
+    },
+  )
+}
+
+async function resumeGraphFromParked(args: {
+  automation: Automation
+  pending: {
+    automation_id: string
+    contact_id: string | null
+    log_id: string | null
+    parked_step_id?: string | null
+    context: AutomationContext | null
+  }
+  context: AutomationContext
+}): Promise<boolean> {
+  const parkedId = args.pending.parked_step_id
+  if (!parkedId) return false
+  const db = supabaseAdmin()
+  const { data: edgeRows } = await db
+    .from('automation_edges')
+    .select('source_step_id, source_port, target_step_id, position')
+    .eq('automation_id', args.automation.id)
+    .eq('source_step_id', parkedId)
+    .order('position', { ascending: true })
+  const edges = (edgeRows ?? []) as Array<{
+    source_step_id: string | null
+    source_port: string
+    target_step_id: string
+    position: number
+  }>
+  if (edges.length === 0) return false
+
+  const replyId = args.context.interactive_reply_id
+  const edge =
+    (replyId
+      ? edges.find((candidate) => candidate.source_port === replyId)
+      : undefined) ??
+    edges.find((candidate) => candidate.source_port === 'other') ??
+    edges.find((candidate) => candidate.source_port === 'default') ??
+    edges[0]
+  if (!edge) return false
+
+  const [{ data: allSteps }, { data: allEdges }] = await Promise.all([
+    db
+      .from('automation_steps')
+      .select('id, parent_step_id, branch, position, step_type, step_config')
+      .eq('automation_id', args.automation.id),
+    db
+      .from('automation_edges')
+      .select('source_step_id, source_port, target_step_id, position')
+      .eq('automation_id', args.automation.id)
+      .order('position', { ascending: true }),
+  ])
+
+  await executeGraphSteps({
+    automation: args.automation,
+    contactId: args.pending.contact_id,
+    context: args.context,
+    logId: args.pending.log_id,
+    triggerEvent: 'resumed_graph',
+    steps: (allSteps ?? []) as AutomationStep[],
+    edges: (allEdges ?? []) as typeof edges,
+    startStepId: edge.target_step_id,
+  })
+  return true
+}
+
 export async function resumePendingExecution(pending: {
   id: string
   automation_id: string
@@ -190,6 +333,16 @@ export async function resumePendingExecution(pending: {
   }
 
   try {
+    if (
+      await resumeGraphFromParked({
+        automation: automation as Automation,
+        pending,
+        context: pending.context ?? {},
+      })
+    ) {
+      await markPending(pending.id, 'done')
+      return
+    }
     const resumePoint = await resolveResumePoint(pending, pending.automation_id)
     if (!resumePoint) {
       await markPending(pending.id, 'expired')
@@ -219,7 +372,14 @@ export interface AwaitingReplyInput {
   contactId: string
   /** The inbound that may be the reply. Overwrites the parked run's
    *  message fields so the steps after the wait see the reply. */
-  context: Pick<AutomationContext, 'message_text' | 'conversation_id' | 'interactive_reply_id'>
+  context: Pick<
+    AutomationContext,
+    | 'message_text'
+    | 'conversation_id'
+    | 'interactive_reply_id'
+    | 'message_location'
+    | 'flow_response'
+  >
 }
 
 /**
@@ -283,6 +443,32 @@ export async function resumeAwaitingReply(input: AwaitingReplyInput): Promise<bo
       return false
     }
 
+    const mergedContext = {
+      ...(pending.context ?? {}),
+      // Always overwrite all three, so a typed reply can't inherit a
+      // stale tap id from the message that started the run.
+      message_text: input.context.message_text ?? '',
+      conversation_id: input.context.conversation_id,
+      interactive_reply_id: input.context.interactive_reply_id,
+      message_location: input.context.message_location,
+      flow_response: input.context.flow_response,
+    }
+    await captureAskDataReply({
+      automation: automation as Automation,
+      pending,
+      context: mergedContext,
+    })
+    if (
+      await resumeGraphFromParked({
+        automation: automation as Automation,
+        pending,
+        context: mergedContext,
+      })
+    ) {
+      await markPending(pending.id, 'done')
+      return true
+    }
+
     const resumePoint = await resolveResumePoint(pending, pending.automation_id)
     if (!resumePoint) {
       await markPending(pending.id, 'expired')
@@ -293,14 +479,7 @@ export async function resumeAwaitingReply(input: AwaitingReplyInput): Promise<bo
     await runResumed({
       automation: automation as Automation,
       contactId: pending.contact_id,
-      context: {
-        ...(pending.context ?? {}),
-        // Always overwrite all three, so a typed reply can't inherit a
-        // stale tap id from the message that started the run.
-        message_text: input.context.message_text ?? '',
-        conversation_id: input.context.conversation_id,
-        interactive_reply_id: input.context.interactive_reply_id,
-      },
+      context: mergedContext,
       ...resumePoint,
       logId: pending.log_id,
       triggerEvent: 'resumed_reply',
@@ -451,16 +630,50 @@ async function executeAutomation(automation: Automation, input: DispatchInput) {
     return
   }
 
-  await executeStepsFrom({
-    automation,
-    contactId: input.contactId ?? null,
-    context: input.context ?? {},
-    parentStepId: null,
-    branch: null,
-    startPosition: 0,
-    logId: log.id,
-    triggerEvent: input.triggerType,
-  })
+  const admin = supabaseAdmin()
+  const [{ data: edgeRows }, { data: allSteps }] = await Promise.all([
+    admin
+      .from('automation_edges')
+      .select('source_step_id, source_port, target_step_id, position')
+      .eq('automation_id', automation.id)
+      .order('position', { ascending: true }),
+    admin
+      .from('automation_steps')
+      .select('id, parent_step_id, branch, position, step_type, step_config')
+      .eq('automation_id', automation.id),
+  ])
+  const graphEdges = (edgeRows ?? []) as Array<{
+    source_step_id: string | null
+    source_port: string
+    target_step_id: string
+    position: number
+  }>
+  const graphSteps = (allSteps ?? []) as AutomationStep[]
+
+  const hasGraphStart = graphEdges.some((edge) => edge.source_step_id === null)
+
+  if (hasGraphStart) {
+    await executeGraphSteps({
+      automation,
+      contactId: input.contactId ?? null,
+      context: input.context ?? {},
+      logId: log.id,
+      triggerEvent: input.triggerType,
+      steps: graphSteps,
+      edges: graphEdges,
+    })
+  } else {
+    await executeStepsFrom({
+      automation,
+      contactId: input.contactId ?? null,
+      context: input.context ?? {},
+      parentStepId: null,
+      branch: null,
+      startPosition: 0,
+      logId: log.id,
+      triggerEvent: input.triggerType,
+    })
+  }
 
   // Atomic counter update via the SQL function from migration 007.
   // Doing this with a client-side read-modify-write raced when the
@@ -472,6 +685,176 @@ async function executeAutomation(automation: Automation, input: DispatchInput) {
   if (rpcErr) {
     console.error('[automations] increment counter failed:', rpcErr)
   }
+}
+
+async function executeGraphSteps(args: {
+  automation: Automation
+  contactId: string | null
+  context: AutomationContext
+  logId: string | null
+  triggerEvent: string
+  steps: AutomationStep[]
+  edges: Array<{
+    source_step_id: string | null
+    source_port: string
+    target_step_id: string
+    position: number
+  }>
+  startStepId?: string
+}) {
+  const byId = new Map(args.steps.map((step) => [step.id, step]))
+  const outgoing = new Map<string, typeof args.edges>()
+  for (const edge of args.edges) {
+    const key = edge.source_step_id ?? '__trigger__'
+    const list = outgoing.get(key) ?? []
+    list.push(edge)
+    outgoing.set(key, list)
+  }
+  const start = (outgoing.get('__trigger__') ?? [])[0]
+  if (!args.startStepId && !start) return
+
+  const results: AutomationLogStepResult[] = []
+  const visited = new Set<string>()
+  let current: string | null = args.startStepId ?? start!.target_step_id
+  let status: 'success' | 'failed' = 'success'
+  let errorMessage: string | null = null
+  const executeArgs: ExecuteArgs = {
+    automation: args.automation,
+    contactId: args.contactId,
+    context: args.context,
+    parentStepId: null,
+    branch: null,
+    startPosition: 0,
+    logId: args.logId,
+    triggerEvent: args.triggerEvent,
+  }
+
+  while (current) {
+    if (visited.has(current)) {
+      status = 'failed'
+      errorMessage = 'Graph contains a cycle'
+      break
+    }
+    visited.add(current)
+    const step = byId.get(current)
+    if (!step) {
+      status = 'failed'
+      errorMessage = 'Graph edge points to a missing step'
+      break
+    }
+
+    if (step.step_type === 'wait') {
+      const cfg = step.step_config as WaitStepConfig
+      const { error: waitErr } = await supabaseAdmin()
+        .from('automation_pending_executions')
+        .insert({
+          automation_id: args.automation.id,
+          account_id: args.automation.account_id,
+          user_id: args.automation.user_id,
+          contact_id: args.contactId,
+          log_id: args.logId,
+          parent_step_id: null,
+          branch: null,
+          next_step_position: 0,
+          parked_step_id: step.id,
+          context: args.context,
+          run_at: new Date(Date.now() + waitMs(cfg)).toISOString(),
+          status: 'pending',
+        })
+      if (waitErr) {
+        status = 'failed'
+        errorMessage = tErr('scheduleWaitFailed', { message: waitErr.message })
+        results.push({
+          step_id: step.id,
+          step_type: step.step_type,
+          status: 'failed',
+          detail: errorMessage,
+        })
+        break
+      }
+      results.push({
+        step_id: step.id,
+        step_type: step.step_type,
+        status: 'success',
+        detail: `waiting ${cfg.amount} ${cfg.unit}`,
+      })
+      await appendResults(args.logId, results, 'partial', null)
+      return
+    }
+
+    if (waitsForReply(step)) {
+      try {
+        const detail = await runStep(step, executeArgs)
+        await parkForReply(step, executeArgs)
+        results.push({
+          step_id: step.id,
+          step_type: step.step_type,
+          status: 'success',
+          detail: `${detail}; waiting for reply`,
+        })
+        await appendResults(args.logId, results, 'partial', null)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        results.push({
+          step_id: step.id,
+          step_type: step.step_type,
+          status: 'failed',
+          detail: message,
+        })
+        await appendResults(args.logId, results, 'failed', message)
+      }
+      return
+    }
+
+    let port = 'default'
+    try {
+      if (step.step_type === 'condition' || step.step_type === 'ab_split') {
+        const taken =
+          step.step_type === 'ab_split'
+            ? Math.random() < 0.5
+            : await evaluateCondition(
+                step.step_config as ConditionStepConfig,
+                executeArgs,
+              )
+        port = taken ? 'yes' : 'no'
+        results.push({
+          step_id: step.id,
+          step_type: step.step_type,
+          status: 'success',
+          detail: `branch=${port}`,
+        })
+      } else {
+        const detail = await runStep(step, executeArgs)
+        results.push({
+          step_id: step.id,
+          step_type: step.step_type,
+          status: 'success',
+          detail,
+        })
+        if (step.step_type === 'handoff') break
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      results.push({
+        step_id: step.id,
+        step_type: step.step_type,
+        status: 'failed',
+        detail: message,
+      })
+      status = 'failed'
+      errorMessage = message
+      break
+    }
+
+    const candidates = outgoing.get(step.id) ?? []
+    const next =
+      candidates.find((edge) => edge.source_port === port) ??
+      candidates.find((edge) => edge.source_port === 'default') ??
+      candidates[0]
+    current = next?.target_step_id ?? null
+  }
+
+  await appendResults(args.logId, results, status, errorMessage)
 }
 
 interface ExecuteArgs {
@@ -614,6 +997,7 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<ScopeOutcome> {
         status: 'success',
         detail,
       })
+      if (step.step_type === 'handoff') break
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       results.push({
@@ -695,6 +1079,12 @@ async function runResumed(args: ExecuteArgs): Promise<void> {
 }
 
 function waitsForReply(step: AutomationStep): boolean {
+  if (
+    step.step_type === 'ask_data' ||
+    step.step_type === 'ask_location' ||
+    step.step_type === 'send_flow'
+  )
+    return true
   if (step.step_type !== 'send_buttons' && step.step_type !== 'send_list') return false
   return (step.step_config as SendButtonsStepConfig).wait_for_reply === true
 }
@@ -730,6 +1120,88 @@ async function parkForReply(step: AutomationStep, args: ExecuteArgs): Promise<vo
     status: 'awaiting_reply',
   })
   if (error) throw new Error(tErr('parkForReplyFailed', { message: error.message }))
+}
+
+async function createHandoffSummary(
+  args: ExecuteArgs,
+  conversationId: string,
+  agentId: string | null,
+): Promise<void> {
+  if (!args.contactId) return
+  const db = supabaseAdmin()
+
+  try {
+    const { data: contact } = await db
+      .from('contacts')
+      .select('name, email, phone, company')
+      .eq('id', args.contactId)
+      .eq('account_id', args.automation.account_id)
+      .maybeSingle()
+
+    const { data: values } = await db
+      .from('contact_custom_values')
+      .select('custom_field_id, value')
+      .eq('contact_id', args.contactId)
+
+    const { data: fields } = await db
+      .from('custom_fields')
+      .select('id, field_name')
+      .eq('account_id', args.automation.account_id)
+
+    const fieldNames = new Map(
+      ((fields ?? []) as Array<{ id: string; field_name: string }>).map(
+        (field) => [field.id, field.field_name],
+      ),
+    )
+
+    const lines: string[] = []
+    if (contact?.name) lines.push(`Nombre: ${contact.name}`)
+    if (contact?.email) lines.push(`Correo: ${contact.email}`)
+    if (contact?.phone) lines.push(`Teléfono: ${contact.phone}`)
+    if (contact?.company) lines.push(`Empresa: ${contact.company}`)
+
+    const custom = ((values ?? []) as Array<{
+      custom_field_id: string
+      value: string | null
+    }>)
+      .map((row) => ({
+        name: fieldNames.get(row.custom_field_id) ?? row.custom_field_id,
+        value: row.value?.trim() ?? '',
+      }))
+      .filter((row) => row.value)
+      .sort((a, b) =>
+        a.name === 'Formulario de admisión'
+          ? -1
+          : b.name === 'Formulario de admisión'
+            ? 1
+            : a.name.localeCompare(b.name),
+      )
+
+    for (const row of custom) lines.push(`${row.name}: ${row.value}`)
+    if (lines.length === 0) return
+
+    const summary = `📋 Resumen de admisión\n\n${lines.join('\n')}`
+
+    await db.from('contact_notes').insert({
+      contact_id: args.contactId,
+      user_id: args.automation.user_id,
+      note_text: summary,
+    })
+
+    if (agentId) {
+      await db.from('notifications').insert({
+        account_id: args.automation.account_id,
+        user_id: agentId,
+        type: 'conversation_assigned',
+        conversation_id: conversationId,
+        contact_id: args.contactId,
+        title: 'Nuevo lead de admisión',
+        body: summary,
+      })
+    }
+  } catch (err) {
+    console.error('[automations] handoff summary failed:', err)
+  }
 }
 
 async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string> {
@@ -879,6 +1351,96 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         .eq('account_id', args.automation.account_id)
         .eq('contact_id', args.contactId)
       return `assigned to ${agentId}`
+    }
+
+    case 'ask_data': {
+      const cfg = step.step_config as AskDataStepConfig
+      if (!args.contactId) throw new Error(tErr('needsContact', { step: 'ask_data' }))
+      const text = interpolate(cfg.message ?? '', args)
+      if (!text.trim()) throw new Error(tErr('emptyText'))
+      const conversationId = await resolveConversationId(args)
+      const { whatsapp_message_id } = await engineSendText({
+        accountId: args.automation.account_id,
+        userId: args.automation.user_id,
+        conversationId,
+        contactId: args.contactId,
+        text,
+      })
+      return `asked for data via Meta (${whatsapp_message_id})`
+    }
+
+    case 'ask_location': {
+      const cfg = step.step_config as AskLocationStepConfig
+      if (!args.contactId) throw new Error(tErr('needsContact', { step: 'ask_location' }))
+      const text = interpolate(cfg.message ?? '', args)
+      if (!text.trim()) throw new Error(tErr('emptyText'))
+      const conversationId = await resolveConversationId(args)
+      const { whatsapp_message_id } = await engineSendLocationRequest({
+        accountId: args.automation.account_id,
+        userId: args.automation.user_id,
+        conversationId,
+        contactId: args.contactId,
+        bodyText: text,
+      })
+      return `requested location via Meta (${whatsapp_message_id})`
+    }
+
+    case 'send_flow': {
+      const cfg = step.step_config as SendFlowStepConfig
+      if (!args.contactId) throw new Error(tErr('needsContact', { step: 'send_flow' }))
+      if (!cfg.flow_id?.trim()) throw new Error(tErr('needsFlow'))
+      const bodyText = interpolate(cfg.body ?? '', args)
+      if (!bodyText.trim()) throw new Error(tErr('emptyText'))
+      const conversationId = await resolveConversationId(args)
+      const { whatsapp_message_id } = await engineSendFlow({
+        accountId: args.automation.account_id,
+        userId: args.automation.user_id,
+        conversationId,
+        contactId: args.contactId,
+        flowId: interpolate(cfg.flow_id, args),
+        flowToken: interpolate(cfg.flow_token || `${args.automation.id}:${step.id}`, args),
+        flowCta: interpolate(cfg.cta ?? 'Abrir', args),
+        bodyText,
+        headerText: interpolate(cfg.header ?? '', args) || undefined,
+        footerText: interpolate(cfg.footer ?? '', args) || undefined,
+        screen: interpolate(cfg.screen ?? '', args) || undefined,
+        action: cfg.action ?? 'navigate',
+      })
+      return `sent flow via Meta (${whatsapp_message_id})`
+    }
+
+    case 'handoff': {
+      const cfg = step.step_config as HandoffStepConfig
+      if (!args.contactId) throw new Error(tErr('needsContact', { step: 'handoff' }))
+      const conversationId = await resolveConversationId(args)
+      const message = interpolate(cfg.message ?? '', args)
+      if (message.trim()) {
+        await engineSendText({
+          accountId: args.automation.account_id,
+          userId: args.automation.user_id,
+          conversationId,
+          contactId: args.contactId,
+          text: message,
+        })
+      }
+      let agentId = cfg.agent_id ?? null
+      if (cfg.mode !== 'specific' || !agentId) {
+        const { data: profiles } = await db
+          .from('profiles')
+          .select('user_id')
+          .eq('account_id', args.automation.account_id)
+          .limit(1)
+        agentId = profiles?.[0]?.user_id ?? null
+      }
+      if (agentId) {
+        await db
+          .from('conversations')
+          .update({ assigned_agent_id: agentId })
+          .eq('id', conversationId)
+          .eq('account_id', args.automation.account_id)
+      }
+      await createHandoffSummary(args, conversationId, agentId)
+      return agentId ? `handed off to ${agentId}` : 'handed off without an agent'
     }
 
     case 'update_contact_field': {

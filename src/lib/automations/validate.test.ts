@@ -42,6 +42,65 @@ describe("validateStepsForActivation", () => {
     ]);
   });
 
+  it("accepts handoff and ab_split without required config", () => {
+    expect(
+      validateStepsForActivation([
+        { step_type: "ab_split", step_config: {} },
+        { step_type: "handoff", step_config: { message: "Te paso con un asesor" } },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("requires a message and contact field for ask_data", () => {
+    expect(
+      validateStepsForActivation([
+        { step_type: "ask_data", step_config: { message: "Your name?", field: "name" } },
+      ]),
+    ).toEqual([]);
+
+    const issues = validateStepsForActivation([
+      { step_type: "ask_data", step_config: {} },
+    ]);
+    expect(issues.map((i) => i.path)).toEqual([
+      "steps[0].message",
+      "steps[0].field",
+    ]);
+  });
+
+  it("validates WhatsApp Flow and location steps", () => {
+    expect(
+      validateStepsForActivation([
+        {
+          step_type: "send_flow",
+          step_config: {
+            flow_id: "flow-1",
+            body: "Fill this in",
+            cta: "Open",
+            action: "navigate",
+            screen: "START",
+          },
+        },
+        {
+          step_type: "ask_location",
+          step_config: { message: "Where are you?", field: "company" },
+        },
+      ]),
+    ).toEqual([]);
+
+    const issues = validateStepsForActivation([
+      { step_type: "send_flow", step_config: { action: "navigate" } },
+      { step_type: "ask_location", step_config: {} },
+    ]);
+    expect(issues.map((i) => i.path)).toEqual([
+      "steps[0].flow_id",
+      "steps[0].body",
+      "steps[0].cta",
+      "steps[0].screen",
+      "steps[1].message",
+      "steps[1].field",
+    ]);
+  });
+
   it("checks wait amount and unit boundaries", () => {
     const issues = validateStepsForActivation([
       { step_type: "wait", step_config: { amount: 0, unit: "minutes" } },

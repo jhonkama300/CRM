@@ -124,6 +124,8 @@ describe('series helpers', () => {
 describe('setup', () => {
   const base = {
     whatsappConnected: true,
+    hasChannel: false,
+    hasDepartment: false,
     hasContacts: false,
     hasApprovedTemplate: false,
     memberCount: 1,
@@ -133,6 +135,8 @@ describe('setup', () => {
   it('reports each step and where to finish it', () => {
     expect(setupSteps(base).map((s) => [s.id, s.done])).toEqual([
       ['whatsapp', true],
+      ['channel', false],
+      ['department', false],
       ['contacts', false],
       ['template', false],
       ['teammate', false],
@@ -146,11 +150,25 @@ describe('setup', () => {
 })
 
 describe('loadOverview', () => {
-  it('calls the RPC with the range and time zone', async () => {
+  it('calls the RPC with the range, time zone and an explicit null channel', async () => {
     const rpc = vi.fn().mockResolvedValue({ data: { days: 30 }, error: null })
     const result = await loadOverview({ rpc } as never, 30, 'Europe/Vilnius')
-    expect(rpc).toHaveBeenCalledWith('dashboard_overview', { p_days: 30, p_tz: 'Europe/Vilnius' })
+    expect(rpc).toHaveBeenCalledWith('dashboard_overview', {
+      p_days: 30,
+      p_tz: 'Europe/Vilnius',
+      p_channel_id: null,
+    })
     expect(result).toEqual({ days: 30 })
+  })
+
+  it('forwards the channel filter', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: { days: 7 }, error: null })
+    await loadOverview({ rpc } as never, 7, 'UTC', 'channel-1')
+    expect(rpc).toHaveBeenCalledWith('dashboard_overview', {
+      p_days: 7,
+      p_tz: 'UTC',
+      p_channel_id: 'channel-1',
+    })
   })
 
   it('throws the RPC error', async () => {

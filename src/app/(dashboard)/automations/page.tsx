@@ -84,6 +84,7 @@ export default function AutomationsPage() {
 
   useEffect(() => {
     load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function toggleActive(a: Automation, next: boolean) {
@@ -157,7 +158,7 @@ export default function AutomationsPage() {
     )
   }
 
-  const showTemplates = automations.length < 3
+  const showTemplates = automations.length === 0
 
   return (
     <div className="space-y-6">
@@ -215,7 +216,7 @@ export default function AutomationsPage() {
           </p>
         </div>
       ) : (
-        <ul className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {automations.map((a) => (
             <AutomationCard
               key={a.id}
@@ -228,7 +229,7 @@ export default function AutomationsPage() {
               t={t}
             />
           ))}
-        </ul>
+        </div>
       )}
 
       <Dialog open={!!pendingDelete} onOpenChange={(v) => !v && setPendingDelete(null)}>
@@ -285,90 +286,81 @@ function AutomationCard({
   const triggerLabel = isKnownTrigger(automation.trigger_type)
     ? tTriggers(`${automation.trigger_type}.label`)
     : automation.trigger_type
+
   return (
-    <li className="rounded-xl border border-border bg-card transition-colors hover:border-border">
-      <div className="flex items-center gap-4 p-4">
-        <div
-          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10"
-          aria-hidden
-        >
-          <Zap className="h-5 w-5 text-primary" />
+    <div className="flex flex-col rounded-xl border border-border bg-card transition-colors hover:border-primary/30">
+      <div className="flex items-start gap-3 p-4">
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary" aria-hidden>
+          <Zap className="h-5 w-5" />
         </div>
-
-        <button
-          type="button"
-          onClick={onEdit}
-          className="min-w-0 flex-1 text-left"
-        >
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-semibold text-foreground">
-              {automation.name}
+        <button type="button" onClick={onEdit} className="min-w-0 flex-1 text-left">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="truncate text-sm font-semibold text-foreground">{automation.name}</span>
+            <span className={automation.is_active ? "rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-500" : "rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"}>
+              {automation.is_active ? t("statusActive") : t("statusPaused")}
             </span>
-            {automation.is_active && (
-              <span className="relative flex h-2 w-2" aria-label={t("activeIndicator")}>
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-              </span>
-            )}
           </div>
-          {automation.description && (
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{automation.description}</p>
-          )}
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span
-              className={cn(
-                "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
-                meta.pillClass,
-              )}
-            >
-              {triggerLabel}
-            </span>
-            <span className="tabular-nums">
-              {automation.execution_count === 1
-                ? t("runs", { count: automation.execution_count })
-                : t("runsPlural", { count: automation.execution_count })}
-            </span>
-            <span aria-hidden>·</span>
-            <span>{t("lastRun", { time: formatRelative(automation.last_executed_at, tRelative) })}</span>
-          </div>
+          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+            {automation.description || t("noDescription")}
+          </p>
         </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label={t("openMenu")}
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[popup-open]:bg-muted"
+          >
+            <MoreVertical className="h-4 w-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onEdit}>
+              <Pencil className="h-4 w-4" />
+              {t("edit")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onDuplicate}>
+              <Copy className="h-4 w-4" />
+              {t("duplicate")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onLogs}>
+              <FileText className="h-4 w-4" />
+              {t("viewLogs")}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onClick={onDelete}>
+              <Trash2 className="h-4 w-4" />
+              {t("delete")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
-        <div className="flex items-center gap-3">
-          <Switch
-            checked={automation.is_active}
-            onCheckedChange={(v) => onToggle(!!v)}
-            aria-label={automation.is_active ? t("deactivate") : t("activate")}
-          />
-
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              aria-label={t("openMenu")}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[popup-open]:bg-muted"
-            >
-              <MoreVertical className="h-4 w-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onEdit}>
-                <Pencil className="h-4 w-4" />
-                {t("edit")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onDuplicate}>
-                <Copy className="h-4 w-4" />
-                {t("duplicate")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onLogs}>
-                <FileText className="h-4 w-4" />
-                {t("viewLogs")}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onClick={onDelete}>
-                <Trash2 className="h-4 w-4" />
-                {t("delete")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+      <div className="mt-auto space-y-3 border-t border-border p-4">
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+          <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 font-medium", meta.pillClass)}>
+            {triggerLabel}
+          </span>
+          <span className="tabular-nums">
+            {automation.execution_count === 1
+              ? t("runs", { count: automation.execution_count })
+              : t("runsPlural", { count: automation.execution_count })}
+          </span>
+          <span>{t("lastRun", { time: formatRelative(automation.last_executed_at, tRelative) })}</span>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={automation.is_active}
+              onCheckedChange={(v) => onToggle(!!v)}
+              aria-label={automation.is_active ? t("deactivate") : t("activate")}
+            />
+            <span className="text-xs text-muted-foreground">
+              {automation.is_active ? t("statusActive") : t("statusPaused")}
+            </span>
+          </div>
+          <Button size="sm" variant="outline" onClick={onEdit}>
+            {t("edit")}
+          </Button>
         </div>
       </div>
-    </li>
+    </div>
   )
 }

@@ -524,6 +524,67 @@ describe('inbound webhook: template quick-reply buttons (#478)', () => {
   })
 })
 
+describe('inbound webhook: WhatsApp Flow and location replies', () => {
+  it('parses a Flow response and hands it to a waiting automation', async () => {
+    await runWebhook({
+      id: 'wamid.FLOW1',
+      from: '15551230000',
+      timestamp: '1700000000',
+      type: 'interactive',
+      interactive: {
+        type: 'flow_reply',
+        nfm_reply: {
+          name: 'flow',
+          body: 'Flow submitted',
+          response_json: '{"name":"Ana","email":"ana@example.com"}',
+        },
+      },
+    })
+
+    expect(h.state.upsertCalls[0].row).toMatchObject({
+      content_type: 'interactive',
+      content_text: 'Flow submitted',
+      interactive_reply_id: null,
+    })
+    expect(h.resumeAwaitingReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({
+          flow_response: { name: 'Ana', email: 'ana@example.com' },
+        }),
+      }),
+    )
+    expect(h.dispatchInboundToFlows).not.toHaveBeenCalled()
+    expect(h.dispatchInboundToAiReply).not.toHaveBeenCalled()
+  })
+
+  it('parses a shared location and hands its coordinates to a waiting automation', async () => {
+    await runWebhook({
+      id: 'wamid.LOC1',
+      from: '15551230000',
+      timestamp: '1700000000',
+      type: 'location',
+      location: { latitude: 4.71, longitude: -74.07, name: 'Office' },
+    })
+
+    expect(h.state.upsertCalls[0].row).toMatchObject({
+      content_type: 'location',
+    })
+    expect(h.resumeAwaitingReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({
+          message_location: {
+            latitude: 4.71,
+            longitude: -74.07,
+            name: 'Office',
+          },
+        }),
+      }),
+    )
+    expect(h.dispatchInboundToFlows).not.toHaveBeenCalled()
+    expect(h.dispatchInboundToAiReply).not.toHaveBeenCalled()
+  })
+})
+
 describe('inbound webhook: inbound media is mirrored (#466)', () => {
   const IMAGE_MESSAGE = {
     id: 'wamid.IMG1',

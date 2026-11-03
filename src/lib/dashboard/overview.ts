@@ -132,6 +132,8 @@ export interface OverviewCampaigns {
 
 export interface OverviewSetup {
   whatsappConnected: boolean
+  hasChannel: boolean
+  hasDepartment: boolean
   hasContacts: boolean
   hasApprovedTemplate: boolean
   memberCount: number
@@ -180,8 +182,17 @@ export async function loadOverview(
   timeZone: string,
   channelId?: string | null,
 ): Promise<DashboardOverview> {
-  const params: Record<string, unknown> = { p_days: days, p_tz: timeZone }
-  if (channelId) params.p_channel_id = channelId
+  // Always send p_channel_id, including null. PostgREST resolves the
+  // function by the argument names in the payload: sending only two
+  // keys makes the call ambiguous on databases that still carry the
+  // legacy dashboard_overview(integer, text) overload next to the
+  // current three-argument version (PGRST203, surfaced to the page as
+  // an unhelpful `{}` error). Null means "all channels".
+  const params: Record<string, unknown> = {
+    p_days: days,
+    p_tz: timeZone,
+    p_channel_id: channelId ?? null,
+  }
   const { data, error } = await db.rpc('dashboard_overview', params)
   if (error) throw error
   return data as DashboardOverview
@@ -278,7 +289,13 @@ export function bucketDate(t: string): Date {
 }
 
 export interface SetupStep {
-  id: 'whatsapp' | 'contacts' | 'template' | 'teammate'
+  id:
+    | 'whatsapp'
+    | 'channel'
+    | 'department'
+    | 'contacts'
+    | 'template'
+    | 'teammate'
   done: boolean
   href: string
 }
@@ -286,6 +303,12 @@ export interface SetupStep {
 export function setupSteps(setup: OverviewSetup): SetupStep[] {
   return [
     { id: 'whatsapp', done: setup.whatsappConnected, href: '/settings?tab=whatsapp' },
+    { id: 'channel', done: setup.hasChannel, href: '/settings?tab=channels' },
+    {
+      id: 'department',
+      done: setup.hasDepartment,
+      href: '/settings?tab=organization',
+    },
     { id: 'contacts', done: setup.hasContacts, href: '/contacts' },
     { id: 'template', done: setup.hasApprovedTemplate, href: '/settings?tab=templates' },
     { id: 'teammate', done: setup.memberCount > 1, href: '/settings?tab=members' },

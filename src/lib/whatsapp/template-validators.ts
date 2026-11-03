@@ -26,6 +26,7 @@ const t = getT('Validation.templates');
 
 export const TEMPLATE_LIMITS = {
   bodyMaxLength: 1024,
+  bodyMaxEmojis: 10,
   footerMaxLength: 60,
   headerTextMaxLength: 60,
   buttonTextMaxLength: 25,
@@ -116,11 +117,27 @@ function assertBodyContiguous(indices: number[]): void {
   }
 }
 
+/** Count emoji code points without requiring an ES2018 regex literal. */
+function countEmojis(text: string): number {
+  return text.match(new RegExp('\\p{Extended_Pictographic}', 'gu'))?.length ?? 0;
+}
+
 export function validateBody(bodyText: string): number[] {
   if (!bodyText.trim()) throw new Error(t('bodyRequired'));
   if (bodyText.length > TEMPLATE_LIMITS.bodyMaxLength) {
     throw new Error(
       t('bodyTooLong', { max: TEMPLATE_LIMITS.bodyMaxLength, got: bodyText.length }),
+    );
+  }
+  if (/(?:\r?\n){3,}/.test(bodyText)) {
+    throw new Error(t('bodyTooManyNewlines'));
+  }
+  if (!bodyText.replace(/\{\{[A-Za-z0-9_]+\}\}/g, '').trim()) {
+    throw new Error(t('bodyOnlyVariables'));
+  }
+  if (countEmojis(bodyText) > TEMPLATE_LIMITS.bodyMaxEmojis) {
+    throw new Error(
+      t('bodyTooManyEmojis', { max: TEMPLATE_LIMITS.bodyMaxEmojis }),
     );
   }
   const indices = extractVariableIndices(bodyText);

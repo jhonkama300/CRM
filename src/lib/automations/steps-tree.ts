@@ -13,6 +13,8 @@ export interface BuilderStepInput {
   step_type: string
   step_config: Record<string, unknown>
   branches?: { yes?: BuilderStepInput[]; no?: BuilderStepInput[] }
+  position_x?: number | null
+  position_y?: number | null
   // Legacy flat form (from template seeds):
   branch?: 'yes' | 'no' | null
   parent_index?: number | null
@@ -26,6 +28,8 @@ interface InsertRow {
   step_type: string
   step_config: Record<string, unknown>
   position: number
+  position_x: number | null
+  position_y: number | null
 }
 
 const uid = () =>
@@ -111,6 +115,8 @@ export function flattenSteps(automationId: string, input: BuilderStepInput[]): I
         step_type: s.step_type,
         step_config: s.step_config ?? {},
         position: idx,
+        position_x: s.position_x ?? null,
+        position_y: s.position_y ?? null,
       })
       if (s.step_type === 'condition' && s.branches) {
         if (s.branches.yes) walk(s.branches.yes, id, 'yes')
@@ -158,6 +164,8 @@ interface DbStep {
   step_type: string
   step_config: Record<string, unknown>
   position: number
+  position_x: number | null
+  position_y: number | null
 }
 
 export async function loadStepsTree(automationId: string): Promise<BuilderStepNode[]> {
@@ -176,6 +184,8 @@ export async function loadStepsTree(automationId: string): Promise<BuilderStepNo
       id: row.id,
       step_type: row.step_type,
       step_config: row.step_config ?? {},
+      position_x: row.position_x,
+      position_y: row.position_y,
       branches: { yes: [], no: [] },
     })
   }

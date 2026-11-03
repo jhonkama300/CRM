@@ -1,6 +1,6 @@
 "use client";
 
-import { List, Reply } from "lucide-react";
+import { FileText, List, Reply } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { InteractiveMessagePayload } from "@/lib/whatsapp/interactive";
 
@@ -44,6 +44,31 @@ export function InteractivePreview({
         className,
       )}
     >
+      {payload.kind === "media" ? (
+        <div className="border-b border-border">
+          {payload.header_media.type === "image" ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={payload.header_media.url}
+              alt=""
+              className="max-h-44 w-full object-cover"
+            />
+          ) : payload.header_media.type === "video" ? (
+            <video
+              src={payload.header_media.url}
+              controls
+              className="max-h-44 w-full bg-black object-contain"
+            />
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-3 text-sm text-muted-foreground">
+              <FileText className="h-4 w-4 shrink-0" />
+              <span className="truncate">
+                {payload.header_media.filename ?? "Document"}
+              </span>
+            </div>
+          )}
+        </div>
+      ) : null}
       <div className="px-3 py-2">
         {payload.header ? (
           <p className="mb-1 break-words text-sm font-semibold">
@@ -62,7 +87,7 @@ export function InteractivePreview({
         ) : null}
       </div>
 
-      {payload.kind === "buttons" ? (
+      {payload.kind === "buttons" && payload.buttons.length > 0 ? (
         <div className="flex flex-col border-t border-border">
           {payload.buttons.map((b, i) => (
             <button
@@ -76,7 +101,21 @@ export function InteractivePreview({
             </button>
           ))}
         </div>
-      ) : (
+      ) : payload.kind === "media" && (payload.buttons?.length ?? 0) > 0 ? (
+        <div className="flex flex-col border-t border-border">
+          {payload.buttons!.map((b, i) => (
+            <button
+              key={b.id || i}
+              type="button"
+              disabled
+              className="flex items-center justify-center gap-1.5 border-t border-border py-2 text-sm font-medium text-primary first:border-t-0"
+            >
+              <Reply className="h-3.5 w-3.5" />
+              <span className="truncate">{b.title || buttonLabel}</span>
+            </button>
+          ))}
+        </div>
+      ) : payload.kind === "list" ? (
         <button
           type="button"
           disabled
@@ -85,7 +124,7 @@ export function InteractivePreview({
           <List className="h-3.5 w-3.5" />
           <span className="truncate">{payload.button_label || menuLabel}</span>
         </button>
-      )}
+      ) : null}
     </div>
   );
 }

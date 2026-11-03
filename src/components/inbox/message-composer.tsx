@@ -5,6 +5,7 @@ import {
   useRef,
   useCallback,
   useEffect,
+  useMemo,
   KeyboardEvent,
 } from "react";
 import {
@@ -21,6 +22,7 @@ import {
   Sparkles,
   Plus,
   MessageSquareDashed,
+  CornerDownLeft,
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -52,7 +54,12 @@ import {
   InteractiveBuilder,
   blankButtonsPayload,
 } from "@/components/interactive/interactive-builder";
-import { validateInteractivePayload } from "@/lib/whatsapp/interactive";
+import {
+  interactivePayloadPreviewText,
+  validateInteractivePayload,
+  type InteractiveMediaPayload,
+} from "@/lib/whatsapp/interactive";
+import { InteractivePreview } from "@/components/interactive/interactive-preview";
 import type { InteractiveMessagePayload, QuickReply } from "@/types";
 import { QuickReplyPicker } from "./quick-reply-picker";
 
@@ -68,6 +75,32 @@ export const MEDIA_CAPTION_MAX = 1024;
 /** Hard cap on a single voice recording so it can't blow the upload/
  *  transcode limits — auto-stops the recorder when reached. */
 const MAX_RECORDING_SECONDS = 5 * 60;
+
+interface SpeechRecognitionResultLike {
+  isFinal: boolean
+  0: { transcript: string }
+}
+
+interface SpeechRecognitionEventLike {
+  resultIndex: number
+  results: {
+    length: number
+    [index: number]: SpeechRecognitionResultLike
+  }
+}
+
+interface SpeechRecognitionLike {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  start: () => void
+  stop: () => void
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null
+  onerror: ((event: { error: string }) => void) | null
+  onend: (() => void) | null
+}
+
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike
 
 export interface SendMediaPayload {
   kind: ComposerMediaKind;
@@ -133,6 +166,14 @@ function formatDuration(seconds: number): string {
  *  Meta-accepted format means no server ffmpeg / transcode step. */
 const OPUS_ENCODER_PATH = "/opus/encoderWorker.min.js";
 
+/** Case/diacritic-insensitive match for `/enfermeria` -> "Enfermería". */
+function normalizeSlash(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase();
+}
+
 export function MessageComposer({
   conversationId,
   sessionExpired,
@@ -152,6 +193,23 @@ export function MessageComposer({
   const [drafting, setDrafting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Loaded once so `/` can filter instantly. The picker modal keeps its
+  // own fetch, so a refresh there doesn't affect this list.
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/quick-replies", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.quick_replies) {
+          setQuickReplies(data.quick_replies as QuickReply[]);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Enter-to-send only on devices with a mouse/keyboard (fine pointer).
   // On touch devices (phones) Enter inserts a newline and the Send button
   // is the only way to send — there's no practical Shift+Enter on a phone,
@@ -168,10 +226,31 @@ export function MessageComposer({
 
   // Interactive-message builder dialog + quick-reply picker.
   const [interactiveOpen, setInteractiveOpen] = useState(false);
+  const [mediaQuickReply, setMediaQuickReply] =
+    useState<InteractiveMediaPayload | null>(null);
   const [interactivePayload, setInteractivePayload] =
     useState<InteractiveMessagePayload>(blankButtonsPayload);
   const [savingQuickReply, setSavingQuickReply] = useState(false);
   const [quickReplyOpen, setQuickReplyOpen] = useState(false);
+  const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
+  const [slash, setSlash] = useState<{
+    start: number;
+    query: string;
+    index: number;
+  } | null>(null);
+
+  const slashMatches = useMemo(() => {
+    if (!slash) return [];
+    const query = normalizeSlash(slash.query);
+    const base = query
+      ? quickReplies.filter((qr) =>
+          normalizeSlash(qr.title).includes(query),
+        )
+      : quickReplies;
+    return base.slice(0, 6);
+  }, [quickReplies, slash]);
+  const [dictating, setDictating] = useState(false);
+  const dictationRef = useRef<SpeechRecognitionLike | null>(null);
 
   // Media attachment state. `draft` holds an uploaded-but-not-yet-sent
   // attachment; `busy` covers the upload/transcode window.
@@ -246,6 +325,7 @@ export function MessageComposer({
     try {
       onSend(trimmed, replyTo?.id);
       setText("");
+      setSlash(null);
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
       }
@@ -254,23 +334,28 @@ export function MessageComposer({
     }
   }, [text, sending, sessionExpired, onSend, replyTo?.id]);
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Enter" && !e.shiftKey && enterSends) {
-        e.preventDefault();
-        handleSend();
-      }
-    },
-    [handleSend, enterSends]
-  );
-
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setText(e.target.value);
+      const value = e.target.value;
+      setText(value);
       adjustHeight();
+
+      const caret = e.target.selectionStart ?? value.length;
+      const beforeCaret = value.slice(0, caret);
+      const match = beforeCaret.match(/(^|\s)\/([^\s]*)$/);
+      if (!readOnly && !sessionExpired && match) {
+        const query = match[2];
+        setSlash({
+          start: caret - query.length - 1,
+          query,
+          index: 0,
+        });
+      } else {
+        setSlash(null);
+      }
       if (e.target.value.trim()) onTyping?.();
     },
-    [adjustHeight, onTyping]
+    [adjustHeight, onTyping, readOnly, sessionExpired]
   );
 
   // Ask the AI assistant for a suggested reply and drop it into the
@@ -378,7 +463,12 @@ export function MessageComposer({
   const handlePickQuickReply = useCallback(
     (qr: QuickReply) => {
       setQuickReplyOpen(false);
+      setSlash(null);
       if (qr.kind === "interactive" && qr.interactive_payload) {
+        if (qr.interactive_payload.kind === "media") {
+          setMediaQuickReply(qr.interactive_payload as InteractiveMediaPayload);
+          return;
+        }
         openInteractiveBuilder(qr.interactive_payload);
         return;
       }
@@ -399,6 +489,72 @@ export function MessageComposer({
     },
     [openInteractiveBuilder, adjustHeight],
   );
+
+  // Replace the active `/query` token with the chosen quick reply.
+  const applySlash = useCallback(
+    (qr: QuickReply) => {
+      if (!slash) return;
+      const before = text.slice(0, slash.start);
+      const after = text.slice(slash.start + 1 + slash.query.length);
+      setSlash(null);
+
+      if (qr.kind === "interactive" && qr.interactive_payload) {
+        setText(`${before}${after}`);
+        handlePickQuickReply(qr);
+        return;
+      }
+
+      const body = qr.content_text ?? "";
+      const next = `${before}${body}${after}`;
+      setText(next);
+      requestAnimationFrame(() => {
+        adjustHeight();
+        const el = textareaRef.current;
+        if (el) {
+          el.focus();
+          const pos = before.length + body.length;
+          el.setSelectionRange(pos, pos);
+        }
+      });
+    },
+    [adjustHeight, handlePickQuickReply, slash, text],
+  );
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (slash && slashMatches.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSlash({
+          ...slash,
+          index: (slash.index + 1) % slashMatches.length,
+        });
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSlash({
+          ...slash,
+          index:
+            (slash.index - 1 + slashMatches.length) % slashMatches.length,
+        });
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setSlash(null);
+        return;
+      }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        applySlash(slashMatches[slash.index] ?? slashMatches[0]);
+        return;
+      }
+    }
+    if (e.key === "Enter" && !e.shiftKey && enterSends) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
 
   // Upload a captured file to chat-media and stage it as a draft.
   const stageUpload = useCallback(
@@ -516,6 +672,58 @@ export function MessageComposer({
     void recorderRef.current?.stop().catch(() => {});
   }, [clearTimer]);
 
+  const startDictation = useCallback(() => {
+    if (dictating) {
+      dictationRef.current?.stop()
+      return
+    }
+    const ctor = (
+      window as unknown as {
+        SpeechRecognition?: SpeechRecognitionCtor
+        webkitSpeechRecognition?: SpeechRecognitionCtor
+      }
+    ).SpeechRecognition ??
+      (
+        window as unknown as {
+          webkitSpeechRecognition?: SpeechRecognitionCtor
+        }
+      ).webkitSpeechRecognition
+    if (!ctor) {
+      toast.error(t("dictationUnsupported"))
+      return
+    }
+
+    const recognition = new ctor()
+    recognition.lang = navigator.language || "es-CO"
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.onresult = (event) => {
+      let finalText = ""
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index]
+        if (result.isFinal) finalText += result[0].transcript
+      }
+      const trimmed = finalText.trim()
+      if (!trimmed) return
+      setText((prev) =>
+        prev.trim() ? `${prev.trimEnd()} ${trimmed}` : trimmed,
+      )
+      requestAnimationFrame(adjustHeight)
+    }
+    recognition.onerror = () => toast.error(t("dictationError"))
+    recognition.onend = () => {
+      dictationRef.current = null
+      setDictating(false)
+    }
+    dictationRef.current = recognition
+    try {
+      recognition.start()
+      setDictating(true)
+    } catch {
+      toast.error(t("dictationError"))
+    }
+  }, [adjustHeight, dictating, t])
+
   // Auto-stop at the cap so a forgotten recording can't blow the
   // upload size limit.
   useEffect(() => {
@@ -581,6 +789,67 @@ export function MessageComposer({
             <LayoutTemplate className="mr-1 h-3 w-3" />
             {t("templates")}
           </Button>
+        </div>
+      )}
+
+      {/* Inline `/` quick-reply suggestions. Pressing Enter picks one. */}
+      {!draft && !recording && slash && slashMatches.length > 0 && (
+        <div className="mb-2 overflow-hidden rounded-xl border border-border bg-popover shadow-lg">
+          <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
+            <span className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+              {t("quickReplies")}
+            </span>
+            <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <kbd className="rounded border border-border bg-muted px-1 py-0.5">
+                ↵
+              </kbd>
+            </span>
+          </div>
+          <ul className="max-h-56 overflow-y-auto p-1">
+            {slashMatches.map((qr, index) => {
+              const preview =
+                qr.kind === "interactive" && qr.interactive_payload
+                  ? interactivePayloadPreviewText(qr.interactive_payload)
+                  : qr.content_text;
+              return (
+                <li key={qr.id}>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onMouseEnter={() =>
+                      setSlash((current) =>
+                        current ? { ...current, index } : current,
+                      )
+                    }
+                    onClick={() => applySlash(qr)}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors",
+                      index === slash.index
+                        ? "bg-primary-soft text-primary"
+                        : "text-foreground hover:bg-muted/70",
+                    )}
+                  >
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                      <Zap className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">
+                        {qr.title}
+                      </span>
+                      {preview && (
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {preview}
+                        </span>
+                      )}
+                    </span>
+                    {index === slash.index && (
+                      <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 
@@ -777,12 +1046,30 @@ export function MessageComposer({
           />
 
           <GatedButton
+            variant="ghost"
+            size="sm"
+            canAct={!readOnly}
+            gateReason={tGate("reasons.sendMessages")}
+            disabled={sessionExpired}
+            title={t(dictating ? "stopDictating" : "dictate")}
+            className={cn(
+              "order-1 h-9 w-9 shrink-0 p-0 sm:order-3",
+              dictating
+                ? "bg-red-500/15 text-red-400 hover:bg-red-500/20"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            onClick={startDictation}
+          >
+            <Mic className={cn("h-4 w-4", dictating && "animate-pulse")} />
+          </GatedButton>
+
+          <GatedButton
             size="sm"
             canAct={!readOnly}
             gateReason={tGate("reasons.sendMessages")}
             disabled={!text.trim() || sessionExpired || sending}
             onClick={handleSend}
-            className="order-1 h-9 w-9 shrink-0 bg-primary p-0 hover:bg-primary/90 disabled:opacity-40 sm:order-3"
+            className="order-1 h-9 w-9 shrink-0 bg-primary p-0 hover:bg-primary/90 disabled:opacity-40 sm:order-4"
           >
             <Send className="h-4 w-4" />
           </GatedButton>
@@ -794,7 +1081,7 @@ export function MessageComposer({
           under the textarea left edge. */}
       {!draft && !recording && (
         <p className="mt-1 pl-1 text-[10px] text-muted-foreground sm:pl-[5.5rem]">
-          {t("draftHint")}
+          {dictating ? t("listening") : t("draftHint")}
         </p>
       )}
 
@@ -824,6 +1111,49 @@ export function MessageComposer({
               {t("saveAsQuickReply")}
             </Button>
             <Button onClick={sendInteractive}>
+              <Send className="mr-1 h-4 w-4" />
+              {t("send")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Media quick-reply preview. */}
+      <Dialog
+        open={!!mediaQuickReply}
+        onOpenChange={(open) => !open && setMediaQuickReply(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("quickReplies")}</DialogTitle>
+          </DialogHeader>
+          {mediaQuickReply && (
+            <div className="rounded-lg bg-muted/40 p-3">
+              <InteractivePreview
+                payload={mediaQuickReply}
+                labels={{
+                  body: t("typeMessagePlaceholder"),
+                  button: t("send"),
+                  menu: t("quickReplies"),
+                }}
+              />
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setMediaQuickReply(null)}
+            >
+              {t("cancel")}
+            </Button>
+            <Button
+              onClick={() => {
+                if (!mediaQuickReply) return;
+                onSendInteractive(mediaQuickReply, replyTo?.id);
+                setMediaQuickReply(null);
+                onClearReply?.();
+              }}
+            >
               <Send className="mr-1 h-4 w-4" />
               {t("send")}
             </Button>

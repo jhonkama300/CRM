@@ -1,7 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Loader2, MessageSquare, Pencil, Plus, Trash2, Zap } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  FileText,
+  Film,
+  Image as ImageIcon,
+  Loader2,
+  MessageSquare,
+  Pencil,
+  Plus,
+  Trash2,
+  Upload,
+  Zap,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 
@@ -22,16 +33,36 @@ import {
 } from "@/components/interactive/interactive-builder";
 import {
   interactivePayloadPreviewText,
+  type InteractiveMediaPayload,
   type InteractiveMessagePayload,
 } from "@/lib/whatsapp/interactive";
+import { INTERACTIVE_LIMITS } from "@/lib/whatsapp/meta-api";
+import {
+  MEDIA_MAX_BYTES_BY_KIND,
+  uploadAccountMedia,
+} from "@/lib/storage/upload-media";
 import type { QuickReply, QuickReplyKind } from "@/types";
+
+const CHAT_MEDIA_BUCKET = "chat-media";
+
+type DraftKind = QuickReplyKind | "media";
 
 interface DraftState {
   id?: string;
   title: string;
-  kind: QuickReplyKind;
+  kind: DraftKind;
   content_text: string;
   interactive_payload: InteractiveMessagePayload;
+  media: InteractiveMediaPayload | null;
+}
+
+function emptyMediaPayload(): InteractiveMediaPayload {
+  return {
+    kind: "media",
+    body: "",
+    header_media: { type: "image", url: "" },
+    buttons: [],
+  };
 }
 
 function emptyDraft(): DraftState {
@@ -40,6 +71,7 @@ function emptyDraft(): DraftState {
     kind: "text",
     content_text: "",
     interactive_payload: blankButtonsPayload(),
+    media: null,
   };
 }
 
@@ -66,15 +98,19 @@ export function QuickRepliesManager() {
   }, [load]);
 
   const openCreate = () => setDraft(emptyDraft());
-  const openEdit = (qr: QuickReply) =>
+  const openEdit = (qr: QuickReply) => {
+    const payload = qr.interactive_payload;
+    const isMedia = qr.kind === "interactive" && payload?.kind === "media";
     setDraft({
       id: qr.id,
       title: qr.title,
-      kind: qr.kind,
+      kind: isMedia ? "media" : qr.kind,
       content_text: qr.content_text ?? "",
       interactive_payload:
         qr.interactive_payload ?? blankButtonsPayload(),
+      media: isMedia ? (payload as InteractiveMediaPayload) : null,
     });
+  };
 
   const save = useCallback(async () => {
     if (!draft) return;
@@ -82,10 +118,34 @@ export function QuickRepliesManager() {
       toast.error(t("nameRequired"));
       return;
     }
-    const payload =
-      draft.kind === "interactive"
-        ? { title: draft.title, kind: "interactive", interactive_payload: draft.interactive_payload }
-        : { title: draft.title, kind: "text", content_text: draft.content_text };
+    let payload;
+    if (draft.kind === "media") {
+      if (!draft.media?.header_media.url) {
+        toast.error(t("mediaRequired"));
+        return;
+      }
+      if (!draft.media.body.trim()) {
+        toast.error(t("mediaBodyRequired"));
+        return;
+      }
+      payload = {
+        title: draft.title,
+        kind: "interactive",
+        interactive_payload: draft.media,
+      };
+    } else if (draft.kind === "interactive") {
+      payload = {
+        title: draft.title,
+        kind: "interactive",
+        interactive_payload: draft.interactive_payload,
+      };
+    } else {
+      payload = {
+        title: draft.title,
+        kind: "text",
+        content_text: draft.content_text,
+      };
+    }
 
     setSaving(true);
     try {
@@ -153,11 +213,7 @@ export function QuickRepliesManager() {
               key={qr.id}
               className="flex items-start gap-3 rounded-lg border border-border bg-card p-3"
             >
-              {qr.kind === "interactive" ? (
-                <Zap className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-              ) : (
-                <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-              )}
+              <QuickReplyIcon qr={qr} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">{qr.title}</p>
                 <p className="truncate text-xs text-muted-foreground">
@@ -211,6 +267,17 @@ export function QuickRepliesManager() {
                   label={t("kindInteractive")}
                   onClick={() => setDraft({ ...draft, kind: "interactive" })}
                 />
+                <KindTab
+                  active={draft.kind === "media"}
+                  label={t("kindMedia")}
+                  onClick={() =>
+                    setDraft({
+                      ...draft,
+                      kind: "media",
+                      media: draft.media ?? emptyMediaPayload(),
+                    })
+                  }
+                />
               </div>
               {draft.kind === "text" ? (
                 <Textarea
@@ -219,12 +286,18 @@ export function QuickRepliesManager() {
                   placeholder={t("textPlaceholder")}
                   className="min-h-28 bg-muted text-foreground"
                 />
-              ) : (
+              ) : draft.kind === "interactive" ? (
                 <InteractiveBuilder
                   value={draft.interactive_payload}
                   onChange={(p) => setDraft({ ...draft, interactive_payload: p })}
                 />
-              )}
+              ) : draft.media ? (
+                <MediaEditor
+                  media={draft.media}
+                  onChange={(media) => setDraft({ ...draft, media })}
+                  t={t}
+                />
+              ) : null}
             </div>
           )}
           <DialogFooter>
@@ -263,5 +336,247 @@ function KindTab({
     >
       {label}
     </button>
+  );
+}
+
+const DOC_MIME = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/plain",
+]);
+
+const DOC_ACCEPT =
+  ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain";
+
+function QuickReplyIcon({ qr }: { qr: QuickReply }) {
+  const payload = qr.interactive_payload;
+  if (qr.kind === "interactive" && payload?.kind === "media") {
+    const type = payload.header_media.type;
+    const Icon =
+      type === "image" ? ImageIcon : type === "video" ? Film : FileText;
+    return <Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />;
+  }
+  return qr.kind === "interactive" ? (
+    <Zap className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+  ) : (
+    <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+  );
+}
+
+function MediaEditor({
+  media,
+  onChange,
+  t,
+}: {
+  media: InteractiveMediaPayload;
+  onChange: (media: InteractiveMediaPayload) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  t: any;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const type = media.header_media.type;
+  const buttons = media.buttons ?? [];
+  const set = (patch: Partial<InteractiveMediaPayload>) =>
+    onChange({ ...media, ...patch });
+
+  async function onFile(file: File | undefined) {
+    if (!file) return;
+    if (type === "image" && !file.type.startsWith("image/")) {
+      toast.error(t("mediaUnsupported"));
+      return;
+    }
+    if (type === "video" && !file.type.startsWith("video/")) {
+      toast.error(t("mediaUnsupported"));
+      return;
+    }
+    if (type === "document" && !DOC_MIME.has(file.type)) {
+      toast.error(t("mediaUnsupported"));
+      return;
+    }
+    const max = MEDIA_MAX_BYTES_BY_KIND[type];
+    if (file.size > max) {
+      toast.error(
+        t("fileTooLarge", { max: (max / 1024 / 1024).toFixed(0) }),
+      );
+      return;
+    }
+    setUploading(true);
+    try {
+      const { publicUrl } = await uploadAccountMedia(CHAT_MEDIA_BUCKET, file);
+      set({
+        header_media: {
+          type,
+          url: publicUrl,
+          filename: type === "document" ? file.name : undefined,
+        },
+      });
+    } catch {
+      toast.error(t("uploadFailed"));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function addButton() {
+    if (buttons.length >= INTERACTIVE_LIMITS.maxButtons) return;
+    let n = buttons.length + 1;
+    while (buttons.some((b) => b.id === `btn_${n}`)) n++;
+    set({ buttons: [...buttons, { id: `btn_${n}`, title: "" }] });
+  }
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="mb-1 block text-xs text-muted-foreground">
+          {t("mediaType")}
+        </label>
+        <select
+          value={type}
+          onChange={(e) => {
+            const next = e.target.value as "image" | "video" | "document";
+            set({ header_media: { type: next, url: "" } });
+          }}
+          className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
+        >
+          <option value="image">{t("mediaImage")}</option>
+          <option value="video">{t("mediaVideo")}</option>
+          <option value="document">{t("mediaDocument")}</option>
+        </select>
+      </div>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept={
+          type === "image" ? "image/*" : type === "video" ? "video/*" : DOC_ACCEPT
+        }
+        className="hidden"
+        onChange={(e) => {
+          void onFile(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+
+      {media.header_media.url ? (
+        <div className="overflow-hidden rounded-lg border border-border">
+          {type === "image" ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={media.header_media.url}
+              alt=""
+              className="max-h-44 w-full object-cover"
+            />
+          ) : type === "video" ? (
+            <video
+              src={media.header_media.url}
+              controls
+              className="max-h-44 w-full bg-black object-contain"
+            />
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-3 text-sm text-muted-foreground">
+              <FileText className="h-4 w-4 shrink-0" />
+              <span className="truncate">
+                {media.header_media.filename ?? t("mediaDocument")}
+              </span>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => fileRef.current?.click()}
+        disabled={uploading}
+      >
+        {uploading ? (
+          <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+        ) : (
+          <Upload className="mr-1 h-4 w-4" />
+        )}
+        {media.header_media.url ? t("changeFile") : t("chooseFile")}
+      </Button>
+
+      <div>
+        <label className="mb-1 block text-xs text-muted-foreground">
+          {t("bodyLabel")}
+        </label>
+        <Textarea
+          value={media.body}
+          maxLength={INTERACTIVE_LIMITS.bodyMaxLength}
+          onChange={(e) => set({ body: e.target.value })}
+          placeholder={t("textPlaceholder")}
+          className="min-h-24 bg-muted text-foreground"
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs text-muted-foreground">
+          {t("footerLabel")}
+        </label>
+        <Input
+          value={media.footer ?? ""}
+          maxLength={INTERACTIVE_LIMITS.footerMaxLength}
+          onChange={(e) => set({ footer: e.target.value })}
+          className="bg-muted text-foreground"
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs text-muted-foreground">
+          {t("buttonsOptional")}
+        </label>
+        <div className="flex flex-col gap-2">
+          {buttons.map((b, index) => (
+            <div key={b.id} className="flex items-center gap-2">
+              <Input
+                value={b.title}
+                maxLength={INTERACTIVE_LIMITS.buttonTitleMaxLength}
+                onChange={(e) =>
+                  set({
+                    buttons: buttons.map((item, i) =>
+                      i === index ? { ...item, title: e.target.value } : item,
+                    ),
+                  })
+                }
+                placeholder={t("buttonPlaceholder")}
+                className="flex-1 bg-muted"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() =>
+                  set({ buttons: buttons.filter((_, i) => i !== index) })
+                }
+                className="text-red-400 hover:bg-red-500/10"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))}
+        </div>
+        {buttons.length < INTERACTIVE_LIMITS.maxButtons && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={addButton}
+            className="mt-2"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {t("addButton")}
+          </Button>
+        )}
+      </div>
+
+      <p className="text-[11px] text-muted-foreground">{t("mediaHint")}</p>
+    </div>
   );
 }

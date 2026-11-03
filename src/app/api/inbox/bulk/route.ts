@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole, toErrorResponse } from "@/lib/auth/account";
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
+import { recordAudit } from "@/lib/audit/log";
 
 type BulkAction = "mark_read" | "close" | "assign" | "tag" | "delete";
 
@@ -65,6 +66,13 @@ export async function POST(request: Request) {
         .eq("account_id", accountId)
         .in("id", ownedIds);
       if (error) return bad(error.message, 500);
+      await recordAudit({
+        accountId,
+        actorUserId: userId,
+        action: "conversations.deleted",
+        entityType: "conversation",
+        metadata: { conversation_ids: ownedIds, count: ownedIds.length },
+      });
       return NextResponse.json({ deleted: ownedIds.length });
     }
 

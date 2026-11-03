@@ -311,6 +311,11 @@ interface SendInteractiveButtonsEngineArgs {
   buttons: InteractiveButton[]
   headerText?: string
   footerText?: string
+  headerMedia?: {
+    type: 'image' | 'video' | 'document'
+    url: string
+    filename?: string
+  }
 }
 
 interface SendInteractiveListEngineArgs {
@@ -403,6 +408,7 @@ async function sendInteractiveViaMeta(
         buttons: input.buttons,
         headerText: input.headerText,
         footerText: input.footerText,
+        headerMedia: input.headerMedia,
       })
       return r.messageId
     }

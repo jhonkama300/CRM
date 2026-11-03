@@ -4,6 +4,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* The app's mode axis is `data-mode` on <html> (see src/lib/themes.ts),
+ * not a `.dark` class. The login screen uses this variant so it can
+ * follow the same saved preference as the rest of the product while
+ * keeping its own hand-tuned surfaces. */
+@custom-variant light (&:is([data-mode="light"] *));
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

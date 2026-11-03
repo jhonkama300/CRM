@@ -42,7 +42,10 @@ interface MetaErrorResponse {
     error_subcode?: number
     type?: string
     fbtrace_id?: string
-    /** WhatsApp-specific envelope — `details` is the human-readable part. */
+    /** Human-readable title/explanation Meta adds for template errors. */
+    error_user_title?: string
+    error_user_msg?: string
+    /** WhatsApp-specific envelope - `details` is the human-readable part. */
     error_data?: { messaging_product?: string; details?: string }
   }
 }
@@ -98,7 +101,17 @@ async function readMetaError(response: Response, fallback: string): Promise<Meta
   try {
     const data = (await response.json()) as MetaErrorResponse
     envelope = data.error
-    if (envelope?.message) message = envelope.message
+    if (envelope?.message) {
+      // "Invalid parameter" is useless on its own. Template failures
+      // carry the actionable explanation in error_user_title/msg (e.g.
+      // "the body can't have more than 10 emojis"), so append it when
+      // Meta provides it.
+      const detail = [envelope.error_user_title, envelope.error_user_msg]
+        .map((part) => part?.trim())
+        .filter((part): part is string => !!part && part !== envelope?.message)
+        .join(' — ')
+      message = detail ? `${envelope.message}: ${detail}` : envelope.message
+    }
   } catch {
     // response body wasn't JSON — keep the fallback
   }
@@ -952,8 +965,14 @@ export interface SendInteractiveButtonsArgs {
   to: string
   /** The body text — what the customer reads above the buttons. */
   bodyText: string
-  /** Optional plain-text header (≤ 60 chars). */
+  /** Optional plain-text header (≤ 60 chars). Ignored with headerMedia. */
   headerText?: string
+  /** Optional media header (image/video/document) for media quick replies. */
+  headerMedia?: {
+    type: 'image' | 'video' | 'document'
+    url: string
+    filename?: string
+  }
   /** Optional grey footer line under the buttons (≤ 60 chars). */
   footerText?: string
   /** 1–3 buttons. Validated against Meta's limits before sending. */
@@ -975,7 +994,7 @@ export async function sendInteractiveButtons(
 ): Promise<MetaSendResult> {
   const {
     phoneNumberId, accessToken, to,
-    bodyText, headerText, footerText, buttons, contextMessageId,
+    bodyText, headerText, headerMedia, footerText, buttons, contextMessageId,
   } = args
   validateInteractiveBody(bodyText)
   validateInteractiveHeaderFooter(headerText, footerText)
@@ -1012,7 +1031,22 @@ export async function sendInteractiveButtons(
       })),
     },
   }
-  if (headerText) interactive.header = { type: 'text', text: headerText }
+  if (headerMedia) {
+    interactive.header = {
+      type: headerMedia.type,
+      [headerMedia.type]:
+        headerMedia.type === 'document'
+          ? {
+              link: headerMedia.url,
+              ...(headerMedia.filename
+                ? { filename: headerMedia.filename }
+                : {}),
+            }
+          : { link: headerMedia.url },
+    }
+  } else if (headerText) {
+    interactive.header = { type: 'text', text: headerText }
+  }
   if (footerText) interactive.footer = { text: footerText }
 
   const body: Record<string, unknown> = {
@@ -1168,6 +1202,163 @@ export async function sendInteractiveList(
   }
   const data = await response.json()
   return { messageId: data.messages[0].id }
+}
+
+export interface WhatsAppFlowSummary {
+  id: string
+  name: string
+  status?: string
+  categories?: unknown
+}
+
+export async function listWhatsAppFlows(args: {
+  wabaId: string
+  accessToken: string
+}): Promise<WhatsAppFlowSummary[]> {
+  const flows: WhatsAppFlowSummary[] = []
+  let next: string | null =
+    `${META_API_BASE}/${args.wabaId}/flows?fields=id,name,status,categories&limit=100`
+  let pages = 0
+  while (next && pages < 10) {
+    pages += 1
+    const response: Response = await fetch(next, {
+      headers: { Authorization: `Bearer ${args.accessToken}` },
+    })
+    if (!response.ok) {
+      await throwMetaError(response, `Meta API error: ${response.status}`)
+    }
+    const body: {
+      data?: WhatsAppFlowSummary[]
+      paging?: { next?: string }
+    } = await response.json()
+    if (body.data) flows.push(...body.data)
+    next = body.paging?.next ?? null
+  }
+  return flows
+}
+
+export interface SendFlowMessageArgs {
+  phoneNumberId: string
+  accessToken: string
+  to: string
+  flowId: string
+  flowToken: string
+  flowCta: string
+  bodyText: string
+  headerText?: string
+  footerText?: string
+  screen?: string
+  action?: 'navigate' | 'data_exchange'
+  data?: Record<string, unknown>
+  contextMessageId?: string
+}
+
+export async function sendFlowMessage(
+  args: SendFlowMessageArgs
+): Promise<MetaSendResult> {
+  const {
+    phoneNumberId, accessToken, to, flowId, flowToken, flowCta,
+    bodyText, headerText, footerText, screen, action, data, contextMessageId,
+  } = args
+  validateInteractiveBody(bodyText)
+  validateInteractiveHeaderFooter(headerText, footerText)
+  if (!flowId.trim()) throw new Error(ti('flowIdRequired'))
+  if (!flowToken.trim()) throw new Error(ti('flowTokenRequired'))
+  if (!flowCta.trim()) throw new Error(ti('flowCtaRequired'))
+  if (flowCta.length > INTERACTIVE_LIMITS.buttonTitleMaxLength) {
+    throw new Error(
+      ti('flowCtaTooLong', { max: INTERACTIVE_LIMITS.buttonTitleMaxLength })
+    )
+  }
+  const flowAction = action ?? 'navigate'
+  if (flowAction === 'navigate' && !screen?.trim()) {
+    throw new Error(ti('flowScreenRequired'))
+  }
+
+  const parameters: Record<string, unknown> = {
+    flow_message_version: '3',
+    flow_token: flowToken,
+    flow_id: flowId,
+    flow_cta: flowCta,
+    flow_action: flowAction,
+  }
+  if (flowAction === 'navigate') {
+    parameters.flow_action_payload = {
+      screen,
+      ...(data && Object.keys(data).length > 0 ? { data } : {}),
+    }
+  }
+
+  const interactive: Record<string, unknown> = {
+    type: 'flow',
+    body: { text: bodyText },
+    action: { name: 'flow', parameters },
+  }
+  if (headerText) interactive.header = { type: 'text', text: headerText }
+  if (footerText) interactive.footer = { text: footerText }
+
+  const body: Record<string, unknown> = {
+    messaging_product: 'whatsapp',
+    ...recipientFields(to),
+    type: 'interactive',
+    interactive,
+  }
+  if (contextMessageId) body.context = { message_id: contextMessageId }
+
+  const response = await fetch(`${META_API_BASE}/${phoneNumberId}/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+  const result = await response.json()
+  return { messageId: result.messages[0].id }
+}
+
+export interface SendLocationRequestArgs {
+  phoneNumberId: string
+  accessToken: string
+  to: string
+  bodyText: string
+  contextMessageId?: string
+}
+
+export async function sendLocationRequest(
+  args: SendLocationRequestArgs
+): Promise<MetaSendResult> {
+  const { phoneNumberId, accessToken, to, bodyText, contextMessageId } = args
+  validateInteractiveBody(bodyText)
+
+  const body: Record<string, unknown> = {
+    messaging_product: 'whatsapp',
+    ...recipientFields(to),
+    type: 'interactive',
+    interactive: {
+      type: 'location_request_message',
+      body: { text: bodyText },
+      action: { name: 'send_location' },
+    },
+  }
+  if (contextMessageId) body.context = { message_id: contextMessageId }
+
+  const response = await fetch(`${META_API_BASE}/${phoneNumberId}/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+  const result = await response.json()
+  return { messageId: result.messages[0].id }
 }
 
 function validateInteractiveBody(bodyText: string): void {

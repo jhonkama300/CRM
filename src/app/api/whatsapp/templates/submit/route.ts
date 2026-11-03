@@ -17,6 +17,7 @@ import { ensureMediaHeaderHandle } from '@/lib/whatsapp/template-header-handle'
 import { normalizeStatus } from '@/lib/whatsapp/template-status-normalize'
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
 import { getT } from '@/lib/i18n/translate'
+import { recordAudit } from '@/lib/audit/log'
 
 const t = getT('Api')
 
@@ -317,6 +318,20 @@ export async function POST(request: Request) {
         { status: 500 },
       )
     }
+
+    await recordAudit({
+      accountId,
+      actorUserId: userId,
+      action: 'template.submitted',
+      entityType: 'template',
+      entityId: row?.id ?? null,
+      metadata: {
+        name: payload.name,
+        language: payload.language,
+        channel_id: resolvedChannelId,
+        status: metaStatus ?? 'DRAFT',
+      },
+    })
 
     return NextResponse.json({
       success: true,

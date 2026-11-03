@@ -20,6 +20,8 @@ import {
 import '@xyflow/react/dist/style.css';
 import {
   Building2,
+  ChevronDown,
+  ChevronUp,
   MailPlus,
   Pencil,
   Plus,
@@ -47,6 +49,9 @@ interface DepartmentNodeData extends Record<string, unknown> {
   managerName: string | null;
   pendingInvites: number;
   canEdit: boolean;
+  collapsed: boolean;
+  isOwnDepartment: boolean;
+  onToggle: (department: Department) => void;
   onAddChild: (department: Department) => void;
   onEdit: (department: Department) => void;
   onDelete: (department: Department) => void;
@@ -55,6 +60,7 @@ interface DepartmentNodeData extends Record<string, unknown> {
 }
 
 type DepartmentNodeType = Node<DepartmentNodeData, 'department'>;
+type OrgNodeType = DepartmentNodeType | CompanyNodeType;
 
 const NODE_WIDTH = 260;
 const NODE_HEIGHT = 140;
@@ -83,6 +89,9 @@ function DepartmentNode({ data, selected }: NodeProps<DepartmentNodeType>) {
     onAddMember,
     onInvite,
     pendingInvites,
+    collapsed,
+    isOwnDepartment,
+    onToggle,
   } = data;
 
   const visibleMembers = members.slice(0, 3);
@@ -127,6 +136,11 @@ function DepartmentNode({ data, selected }: NodeProps<DepartmentNodeType>) {
         >
           {t('departmentLabel')}
         </span>
+        {isOwnDepartment && (
+          <span className="rounded-full bg-primary px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-primary-foreground">
+            {t('yourDepartment')}
+          </span>
+        )}
         <span className="border-border text-muted-foreground ml-auto rounded border px-1.5 py-0.5 text-[8.5px] font-bold tracking-[0.1em] uppercase">
           {t('membersCount', { count: members.length })}
         </span>
@@ -241,13 +255,136 @@ function DepartmentNode({ data, selected }: NodeProps<DepartmentNodeType>) {
         position={Position.Bottom}
         className="!bg-card !h-2.5 !w-2.5 !border-2 !border-[var(--nc)]"
       />
+      {childCount > 0 && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle(department);
+          }}
+          className="nodrag nopan border-border text-muted-foreground hover:text-foreground mt-2 flex w-full items-center justify-between border-t pt-2 text-[10px] font-medium"
+        >
+          <span>{t('subdepartmentsCount', { count: childCount })}</span>
+          {collapsed ? (
+            <ChevronDown className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronUp className="h-3.5 w-3.5" />
+          )}
+        </button>
+      )}
     </div>
   );
 }
 
-const NODE_TYPES = { department: DepartmentNode };
+interface CompanyNodeData extends Record<string, unknown> {
+  name: string;
+  totalMembers: number;
+  members: AccountMember[];
+  onInvite: () => void;
+  departmentCount: number;
+  canEdit: boolean;
+  collapsed: boolean;
+  onAddRoot: () => void;
+  onToggle: () => void;
+}
+
+type CompanyNodeType = Node<CompanyNodeData, 'company'>;
+
+function CompanyNode({ data }: NodeProps<CompanyNodeType>) {
+  const t = useTranslations('Settings.organization');
+  const { name, totalMembers, members, departmentCount, canEdit, collapsed, onAddRoot, onToggle, onInvite } = data;
+
+  return (
+    <div className="relative w-[280px] rounded-xl border-2 border-primary/40 bg-card px-4 py-3.5 text-left shadow-[0_10px_30px_-12px_rgba(0,0,0,0.35)]">
+      <span className="absolute -top-2.5 right-3 rounded-full bg-primary px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary-foreground">
+        {t('yourCompany')}
+      </span>
+      <div className="flex items-start gap-2.5">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Building2 className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-foreground">{name}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{t('employees')}</p>
+          <span className="mt-1 inline-flex rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] text-foreground">
+            {t('membersCount', { count: totalMembers })}
+          </span>
+        </div>
+        <div className="flex items-center gap-0.5">
+          {canEdit && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onInvite();
+                }}
+                className="nodrag nopan rounded p-1 text-muted-foreground hover:bg-muted hover:text-primary"
+                title={t('invite')}
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddRoot();
+                }}
+                className="nodrag nopan rounded p-1 text-muted-foreground hover:bg-muted hover:text-primary"
+                title={t('addDepartment')}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="mt-2 flex items-center gap-1.5 border-t border-border pt-2">
+        <div className="flex -space-x-1.5">
+          {members.slice(0, 5).map((member) => (
+            <span
+              key={member.user_id}
+              className="flex h-5 w-5 items-center justify-center rounded-full border border-card bg-muted text-[8px] font-semibold text-foreground"
+              title={member.full_name || member.email || 'U'}
+            >
+              {initials(member.full_name || member.email || 'U')}
+            </span>
+          ))}
+        </div>
+        {members.length > 5 && (
+          <span className="text-[10px] text-muted-foreground">+{members.length - 5}</span>
+        )}
+        <span className="ml-auto text-[10px] text-muted-foreground">
+          {t('totalEmployees')}: {totalMembers}
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+        className="nodrag nopan mt-2 flex w-full items-center justify-between border-t border-border pt-2 text-[10px] font-medium text-muted-foreground hover:text-foreground"
+      >
+        <span>{t('subdepartmentsCount', { count: departmentCount })}</span>
+        {collapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+      </button>
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="!bg-card !h-2.5 !w-2.5 !border-2 !border-primary"
+      />
+    </div>
+  );
+}
+
+const NODE_TYPES = { department: DepartmentNode, company: CompanyNode };
 
 export interface OrganizationCanvasProps {
+  accountName: string;
+  onInviteCompany: () => void;
+  totalMembers: number;
+  currentUserId: string | null;
   departments: Department[];
   memberships: DepartmentMember[];
   accountMembers: AccountMember[];
@@ -263,6 +400,10 @@ export interface OrganizationCanvasProps {
 }
 
 function OrganizationCanvasInner({
+  accountName,
+  totalMembers,
+  onInviteCompany,
+  currentUserId,
   departments,
   memberships,
   accountMembers,
@@ -278,6 +419,36 @@ function OrganizationCanvasInner({
 }: OrganizationCanvasProps) {
   const t = useTranslations('Settings.organization');
   const [levelMode, setLevelMode] = useState(true);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const companyCollapsed = collapsed.has('__company__');
+
+  const toggleCollapsed = (id: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const visibleDepartments = useMemo(() => {
+    if (companyCollapsed) return [];
+    const hidden = new Set<string>();
+    const byId = new Map(departments.map((d) => [d.id, d]));
+    const isHidden = (department: Department): boolean => {
+      if (hidden.has(department.id)) return true;
+      let parentId = department.parent_id;
+      while (parentId) {
+        if (collapsed.has(parentId)) {
+          hidden.add(department.id);
+          return true;
+        }
+        parentId = byId.get(parentId)?.parent_id ?? null;
+      }
+      return false;
+    };
+    return departments.filter((department) => !isHidden(department));
+  }, [companyCollapsed, collapsed, departments]);
 
   const people = useMemo(() => {
     const map = new Map<string, AccountMember>();
@@ -307,14 +478,28 @@ function OrganizationCanvasInner({
     return map;
   }, [departments]);
 
-  const edges = useMemo<Edge[]>(
-    () =>
-      departments
-        .filter((d) => d.parent_id)
-        .map((d) => ({
-          id: `${d.parent_id}->${d.id}`,
-          source: d.parent_id!,
-          target: d.id,
+  const edges = useMemo<Edge[]>(() => {
+    const list: Edge[] = visibleDepartments
+      .filter((d) => d.parent_id)
+      .map((d) => ({
+        id: `${d.parent_id}->${d.id}`,
+        source: d.parent_id!,
+        target: d.id,
+        type: 'smoothstep',
+        style: { stroke: 'var(--border)', strokeWidth: 1.5 },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: 'var(--muted-foreground)',
+          width: 14,
+          height: 14,
+        },
+      }));
+    if (!companyCollapsed) {
+      for (const root of visibleDepartments.filter((d) => !d.parent_id)) {
+        list.push({
+          id: `__company__->${root.id}`,
+          source: '__company__',
+          target: root.id,
           type: 'smoothstep',
           style: { stroke: 'var(--border)', strokeWidth: 1.5 },
           markerEnd: {
@@ -323,29 +508,11 @@ function OrganizationCanvasInner({
             width: 14,
             height: 14,
           },
-        })),
-    [departments],
-  );
-
-  const depthById = useMemo(() => {
-    const byId = new Map(departments.map((d) => [d.id, d]));
-    const depths = new Map<string, number>();
-    const visit = (id: string, seen: Set<string>): number => {
-      const cached = depths.get(id);
-      if (cached !== undefined) return cached;
-      const dept = byId.get(id);
-      if (!dept || !dept.parent_id || seen.has(id)) {
-        depths.set(id, 0);
-        return 0;
+        });
       }
-      seen.add(id);
-      const depth = visit(dept.parent_id, seen) + 1;
-      depths.set(id, depth);
-      return depth;
-    };
-    for (const department of departments) visit(department.id, new Set());
-    return depths;
-  }, [departments]);
+    }
+    return list;
+  }, [visibleDepartments, companyCollapsed]);
 
   // Always compute a layout for nodes that have never been positioned.
   // Once one card is dragged, the others must keep their laid-out spot
@@ -358,7 +525,10 @@ function OrganizationCanvasInner({
           width: NODE_WIDTH,
           height: NODE_HEIGHT,
         })),
-        edges.map((e) => ({ source: e.source, target: e.target })),
+        edges
+          .filter((e) => e.source !== '__company__')
+          .map((e) => ({ source: e.source, target: e.target })),
+
         {
           direction: 'TB',
           rankSep: 90,
@@ -370,84 +540,114 @@ function OrganizationCanvasInner({
     [departments, edges],
   );
 
-  const levelYByDepth = useMemo(() => {
-    const levels = new Map<number, number>();
-    for (const department of departments) {
-      const depth = depthById.get(department.id) ?? 0;
-      const position = layout.get(department.id);
-      if (position && !levels.has(depth)) levels.set(depth, position.y);
-    }
-    return levels;
-  }, [departments, depthById, layout]);
+  const ownDepartmentIds = useMemo(() => {
+    if (!currentUserId) return new Set<string>();
+    return new Set(
+      memberships
+        .filter((membership) => membership.user_id === currentUserId)
+        .map((membership) => membership.department_id),
+    );
+  }, [memberships, currentUserId]);
 
-  const baseNodes = useMemo<DepartmentNodeType[]>(
-    () =>
-      departments.map((department) => {
-        const stored = {
-          x: department.position_x,
-          y: department.position_y,
-        };
-        const fallback =
-          stored.x === 0 && stored.y === 0
-            ? (layout.get(department.id) ?? { x: 0, y: 0 })
-            : stored;
-        const depth = depthById.get(department.id) ?? 0;
-        const position = levelMode
-          ? {
-              x: fallback.x,
-              y: levelYByDepth.get(depth) ?? fallback.y,
-            }
-          : fallback;
-        const members = membersByDepartment.get(department.id) ?? [];
-        const manager = members.find((m) => m.role === 'manager');
-        const managerPerson = manager
-          ? people.get(manager.user_id)
-          : null;
-        return {
-          id: department.id,
-          type: 'department',
-          position,
-          data: {
-            department,
-            members,
-            people,
-            childCount: childCountByDepartment.get(department.id) ?? 0,
-            managerName:
-              managerPerson?.full_name ||
-              managerPerson?.email ||
-              manager?.user_id ||
-              null,
-            pendingInvites:
-              invitationsByDepartment.get(department.id)?.length ?? 0,
-            canEdit,
-            onAddChild,
-            onEdit,
-            onDelete,
-            onAddMember,
-            onInvite,
-          },
-        };
-      }),
-    [
-      departments,
-      layout,
-      depthById,
-      levelMode,
-      levelYByDepth,
-      membersByDepartment,
-      people,
-      childCountByDepartment,
-      canEdit,
-      onAddChild,
-      onEdit,
-      onDelete,
-      onAddMember,
-      onInvite,
-      invitationsByDepartment,
-    ],
-  );
+  const baseNodes = useMemo<OrgNodeType[]>(() => {
+    const departmentNodes: DepartmentNodeType[] = visibleDepartments.map((department) => {
+      const stored = { x: department.position_x, y: department.position_y };
+      const fallback =
+        stored.x === 0 && stored.y === 0
+          ? (layout.get(department.id) ?? { x: 0, y: 0 })
+          : stored;
+      const position = levelMode
+        ? (layout.get(department.id) ?? fallback)
+        : fallback;
+      const members = membersByDepartment.get(department.id) ?? [];
+      const manager = members.find((m) => m.role === 'manager');
+      const managerPerson = manager ? people.get(manager.user_id) : null;
+      return {
+        id: department.id,
+        type: 'department',
+        position,
+        data: {
+          department,
+          members,
+          people,
+          childCount: childCountByDepartment.get(department.id) ?? 0,
+          managerName:
+            managerPerson?.full_name ||
+            managerPerson?.email ||
+            manager?.user_id ||
+            null,
+          pendingInvites: invitationsByDepartment.get(department.id)?.length ?? 0,
+          canEdit,
+          collapsed: collapsed.has(department.id),
+          isOwnDepartment: ownDepartmentIds.has(department.id),
+          onToggle: (target: Department) => toggleCollapsed(target.id),
+          onAddChild,
+          onEdit,
+          onDelete,
+          onAddMember,
+          onInvite,
+        },
+      };
+    });
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<DepartmentNodeType>(baseNodes);
+    const rootNodes = departmentNodes.filter((node) => !node.data.department.parent_id);
+    const anchorPositions = rootNodes.length
+      ? rootNodes.map((node) => node.position)
+      : departments
+          .filter((department) => !department.parent_id)
+          .map((department) => layout.get(department.id) ?? { x: 0, y: 0 });
+    const anchorX = anchorPositions.length
+      ? anchorPositions.reduce((sum, position) => sum + position.x, 0) /
+        anchorPositions.length
+      : 0;
+    const anchorY = anchorPositions.length
+      ? Math.min(...anchorPositions.map((position) => position.y))
+      : 0;
+    const companyNode: CompanyNodeType = {
+      id: '__company__',
+      type: 'company',
+      draggable: false,
+      position: { x: anchorX + (NODE_WIDTH - 280) / 2, y: anchorY - 190 },
+      data: {
+        name: accountName,
+        totalMembers,
+        members: accountMembers,
+        onInvite: onInviteCompany,
+        departmentCount: departments.length,
+        canEdit,
+        collapsed: companyCollapsed,
+        onAddRoot,
+        onToggle: () => toggleCollapsed('__company__'),
+      },
+    };
+
+    return [companyNode, ...departmentNodes];
+  }, [
+    visibleDepartments,
+    layout,
+    levelMode,
+    membersByDepartment,
+    people,
+    childCountByDepartment,
+    canEdit,
+    onAddChild,
+    onEdit,
+    onDelete,
+    onAddMember,
+    onInvite,
+    invitationsByDepartment,
+    collapsed,
+    ownDepartmentIds,
+    accountName,
+    totalMembers,
+    accountMembers,
+    departments,
+    companyCollapsed,
+    onAddRoot,
+    onInviteCompany,
+  ]);
+
+  const [nodes, setNodes, onNodesChange] = useNodesState<OrgNodeType>(baseNodes);
 
   // Sync prop-derived nodes into React Flow only when the source data
   // changes. During a drag the base array is stable, so this must not
@@ -480,22 +680,19 @@ function OrganizationCanvasInner({
         nodesConnectable={false}
         onNodesChange={onNodesChange}
         onNodeDragStop={(_, node) => {
-          const depth = depthById.get(node.id) ?? 0;
-          const y = levelMode
-            ? (levelYByDepth.get(depth) ?? node.position.y)
-            : node.position.y;
-          const next = { x: node.position.x, y };
+          if (node.id === '__company__') return;
+          setLevelMode(false);
           setNodes((prev) =>
-            prev.map((n) => (n.id === node.id ? { ...n, position: next } : n)),
+            prev.map((n) => (n.id === node.id ? { ...n, position: node.position } : n)),
           );
-          onPositionChange(node.id, next.x, next.y);
+          onPositionChange(node.id, node.position.x, node.position.y);
         }}
         onNodeDoubleClick={(_, node) => {
           const department = departments.find((d) => d.id === node.id);
           if (department) onEdit(department);
         }}
         fitView
-        fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
+        fitViewOptions={{ padding: 0.15, minZoom: 0.78, maxZoom: 1 }}
         minZoom={0.2}
         maxZoom={1.5}
         proOptions={{ hideAttribution: true }}
@@ -514,7 +711,7 @@ function OrganizationCanvasInner({
           pannable
           zoomable
           nodeColor={(node) =>
-            (node.data as DepartmentNodeData | undefined)?.department.color ??
+            (node.data as DepartmentNodeData | undefined)?.department?.color ??
             '#6366f1'
           }
           nodeStrokeWidth={0}

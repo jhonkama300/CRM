@@ -30,6 +30,7 @@ import { encrypt, decrypt } from '@/lib/whatsapp/encryption'
 import { resolveVerifyTokenForSave } from '@/lib/whatsapp/verify-token'
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
 import { getT } from '@/lib/i18n/translate'
+import { recordAudit } from '@/lib/audit/log'
 
 const t = getT('Api')
 
@@ -543,6 +544,19 @@ export async function POST(request: Request) {
         )
       }
     }
+
+    await recordAudit({
+      accountId,
+      actorUserId: userId,
+      action: 'whatsapp_config.saved',
+      entityType: 'whatsapp_config',
+      entityId: existing?.id ?? null,
+      metadata: {
+        phone_number_id,
+        waba_id: waba_id || null,
+        registered: registeredAt != null,
+      },
+    })
 
     if (registrationError) {
       // Save succeeded but the number isn't actually live. Return

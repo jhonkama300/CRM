@@ -1,27 +1,26 @@
 'use client';
 
-import { Suspense, useMemo, type ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
 import { useAuth } from '@/hooks/use-auth';
-import { useTheme } from '@/hooks/use-theme';
 import { SettingsRail } from '@/components/settings/settings-rail';
 import { SettingsOverview } from '@/components/settings/settings-overview';
-import { ProfileForm } from '@/components/settings/profile-form';
-import { SecurityPanel } from '@/components/settings/security-panel';
-import { AppearancePanel } from '@/components/settings/appearance-panel';
 import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
 import { ChannelsPanel } from '@/components/settings/channels-panel';
 import { TemplateManager } from '@/components/settings/template-manager';
 import { QuickRepliesManager } from '@/components/settings/quick-replies-manager';
 import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel';
+import { PipelinesSettings } from '@/components/settings/pipelines-settings';
+import { WorkTimePanel } from '@/components/settings/worktime-panel';
 import { DealsSettings } from '@/components/settings/deals-settings';
 import { InboxSettings } from '@/components/settings/inbox-settings';
 import { OrganizationPanel } from '@/components/settings/organization-panel';
 import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import { HealthPanel } from '@/components/settings/health-panel';
+import { AuditLogPanel } from '@/components/settings/audit-log-panel';
 import {
   resolveSection,
   type SettingsSection,
@@ -47,7 +46,6 @@ function SettingsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { defaultCurrency } = useAuth();
-  const { mode } = useTheme();
   const t = useTranslations('Settings');
 
   // The URL (`?tab=`) is the single source of truth for the active
@@ -63,31 +61,27 @@ function SettingsPageInner() {
   };
 
   // Cheap, fetch-free rail hints. The Overview landing carries the
-  // full live status/counts; the rail just surfaces the two that are
+  // full live status/counts; the rail just surfaces the one that is
   // already in context.
-  const hints: Partial<Record<SettingsSection, ReactNode>> = useMemo(
-    () => ({
-      appearance: mode.charAt(0).toUpperCase() + mode.slice(1),
-      deals: defaultCurrency,
-    }),
-    [mode, defaultCurrency],
-  );
+  const hints: Partial<Record<SettingsSection, ReactNode>> = {
+    deals: defaultCurrency,
+  };
 
   const panel: Record<SettingsSection, ReactNode> = {
     overview: <SettingsOverview onSelect={go} />,
-    profile: <ProfileForm />,
-    security: <SecurityPanel />,
-    appearance: <AppearancePanel />,
     whatsapp: <WhatsAppConfig />,
     channels: <ChannelsPanel />,
     templates: <TemplateManager />,
     'quick-replies': <QuickRepliesManager />,
     fields: <FieldsAndTagsPanel />,
+    pipelines: <PipelinesSettings />,
+    worktime: <WorkTimePanel />,
     inbox: <InboxSettings />,
     deals: <DealsSettings />,
     organization: <OrganizationPanel />,
     members: <MembersTab />,
     health: <HealthPanel />,
+    audit: <AuditLogPanel />,
     api: <ApiKeysSettings />,
   };
 

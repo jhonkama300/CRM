@@ -93,8 +93,9 @@ export function ContactActivity({
         await Promise.all([
           supabase
             .from("conversations")
-            .select("id, created_at")
-            .eq("contact_id", contact.id),
+            .select("id, status, created_at, closed_at, updated_at")
+            .eq("contact_id", contact.id)
+            .order("created_at", { ascending: false }),
           supabase
             .from("contact_notes")
             .select("id, note_text, created_at")
@@ -161,6 +162,29 @@ export function ContactActivity({
           detail: contact.name || contact.phone || undefined,
         },
       ];
+
+      for (const conversation of conversations) {
+        const openedAt = conversation.created_at as string
+        out.push({
+          id: `conversation-open-${conversation.id}`,
+          at: openedAt,
+          kind: "message",
+          title: t("conversationOpened"),
+          tone: "primary",
+        })
+        if (
+          conversation.status === "closed" ||
+          typeof conversation.closed_at === "string"
+        ) {
+          out.push({
+            id: `conversation-close-${conversation.id}`,
+            at: (conversation.closed_at ?? conversation.updated_at) as string,
+            kind: "message",
+            title: t("conversationClosed"),
+            tone: "muted",
+          })
+        }
+      }
 
       for (const note of (notesRes.data ?? []) as ActivityRow[]) {
         out.push({

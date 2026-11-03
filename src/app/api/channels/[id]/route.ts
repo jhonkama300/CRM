@@ -4,6 +4,7 @@ import { decrypt, encrypt } from '@/lib/whatsapp/encryption';
 import { validateChannelCredentials } from '@/lib/whatsapp/channel-validation';
 import { registerPhoneNumber } from '@/lib/whatsapp/meta-api';
 import { explainMetaError } from '@/lib/whatsapp/meta-error-explain';
+import { recordAudit } from '@/lib/audit/log';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -13,7 +14,7 @@ function bad(message: string, status = 400) {
 
 export async function PATCH(request: Request, { params }: Params) {
   try {
-    const { supabase, accountId } = await requireRole('admin');
+    const { supabase, accountId, userId } = await requireRole('admin');
     const { id } = await params;
     const body = await request.json().catch(() => null);
     if (!body) return bad('Invalid request body');
@@ -152,6 +153,14 @@ export async function PATCH(request: Request, { params }: Params) {
       .maybeSingle();
     if (error) return bad(error.message, 500);
     if (!data) return bad('Channel not found', 404);
+    await recordAudit({
+      accountId,
+      actorUserId: userId,
+      action: 'channel.updated',
+      entityType: 'channel',
+      entityId: data.id,
+      metadata: { name: data.name, fields: Object.keys(patch) },
+    });
     if (registrationError) {
       return NextResponse.json(
         { channel: data, error: registrationError },
@@ -166,14 +175,25 @@ export async function PATCH(request: Request, { params }: Params) {
 
 export async function DELETE(_request: Request, { params }: Params) {
   try {
-    const { supabase, accountId } = await requireRole('admin');
+    const { supabase, accountId, userId } = await requireRole('admin');
     const { id } = await params;
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('channels')
       .delete()
       .eq('id', id)
-      .eq('account_id', accountId);
+      .eq('account_id', accountId)
+      .select('id, name')
+      .maybeSingle();
     if (error) return bad(error.message, 500);
+    if (!data) return bad('Channel not found', 404);
+    await recordAudit({
+      accountId,
+      actorUserId: userId,
+      action: 'channel.deleted',
+      entityType: 'channel',
+      entityId: data.id,
+      metadata: { name: data.name },
+    });
     return NextResponse.json({ success: true });
   } catch (err) {
     return toErrorResponse(err);

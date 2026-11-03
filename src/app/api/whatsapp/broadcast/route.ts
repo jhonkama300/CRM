@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
+import { recordAudit } from '@/lib/audit/log'
 import { sendTemplateMessage } from '@/lib/whatsapp/meta-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder'
@@ -250,6 +251,20 @@ export async function POST(request: Request) {
         failedCount++
       }
     }
+
+    await recordAudit({
+      accountId,
+      actorUserId: userId,
+      action: 'broadcast.sent',
+      entityType: 'broadcast',
+      metadata: {
+        template_name,
+        channel_id: channel.id,
+        total: recipients.length,
+        sent: sentCount,
+        failed: failedCount,
+      },
+    })
 
     return NextResponse.json({
       success: true,
