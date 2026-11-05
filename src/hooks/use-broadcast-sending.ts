@@ -3,10 +3,7 @@
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
-import {
-  BATCH_SEND_ATTEMPTS,
-  batchRetryDelayMs,
-} from '@/lib/broadcast-retry';
+import { BATCH_SEND_ATTEMPTS, batchRetryDelayMs } from '@/lib/broadcast-retry';
 import {
   resolveAudienceContacts,
   type AudienceConfig,
@@ -19,6 +16,7 @@ import {
 } from '@/lib/whatsapp/broadcast-delivery-lease';
 import { fetchAllInChunks, fetchAllPages } from '@/lib/supabase/paged-query';
 import { BroadcastRecipient, Contact, MessageTemplate } from '@/types';
+import { resolveContactSendTarget } from '@/lib/whatsapp/wa-identity';
 import { getT } from '@/lib/i18n/translate';
 
 export type {
@@ -63,7 +61,9 @@ export interface BroadcastSendOutcome {
 }
 
 interface UseBroadcastSendingReturn {
-  createAndSendBroadcast: (payload: BroadcastPayload) => Promise<BroadcastSendOutcome>;
+  createAndSendBroadcast: (
+    payload: BroadcastPayload
+  ) => Promise<BroadcastSendOutcome>;
   isProcessing: boolean;
   progress: number;
 }
@@ -100,7 +100,7 @@ function heldLeaseOrThrow(result: DeliveryLeaseResult): string {
     console.error('[broadcast] delivery lease renewal failed:', result.message);
   }
   throw new DeliveryLeaseInterrupted(
-    result.status === 'lost' ? 'lease_lost' : 'lease_error',
+    result.status === 'lost' ? 'lease_lost' : 'lease_error'
   );
 }
 
@@ -122,7 +122,7 @@ type CustomValueIndex = Map<string, Map<string, string>>;
 export function resolveVariables(
   variables: Record<string, VariableMapping>,
   contact: Contact,
-  customValues?: Map<string, string>,
+  customValues?: Map<string, string>
 ): string[] {
   // Keys are typically "1","2",... — numeric-aware sort keeps
   // {{1}} before {{10}}.
@@ -158,7 +158,7 @@ export function resolveVariables(
  */
 async function fetchCustomValueIndex(
   supabase: ReturnType<typeof createClient>,
-  contactIds: string[],
+  contactIds: string[]
 ): Promise<CustomValueIndex> {
   const index: CustomValueIndex = new Map();
   const rows = await fetchAllInChunks<
@@ -170,7 +170,7 @@ async function fetchCustomValueIndex(
       .select('contact_id, custom_field_id, value')
       .in('contact_id', slice)
       .order('id')
-      .range(from, to),
+      .range(from, to)
   );
 
   for (const row of rows) {
@@ -190,7 +190,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
   async function resolveAudience(audience: AudienceConfig): Promise<Contact[]> {
     const supabase = createClient();
     return resolveAudienceContacts(supabase, audience, (rows) =>
-      upsertCsvContacts(supabase, rows),
+      upsertCsvContacts(supabase, rows)
     );
   }
 
@@ -210,7 +210,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
    */
   async function upsertCsvContacts(
     supabase: ReturnType<typeof createClient>,
-    csvRows: { phone: string; name?: string }[],
+    csvRows: { phone: string; name?: string }[]
   ): Promise<Contact[]> {
     if (csvRows.length === 0) return [];
 
@@ -252,7 +252,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             .eq('account_id', accountId)
             .in('phone_normalized', slice)
             .order('id')
-            .range(from, to),
+            .range(from, to)
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -285,7 +285,9 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         .insert(chunk)
         .select();
       if (insertErr) {
-        throw new Error(t('createCsvContactsFailed', { error: insertErr.message }));
+        throw new Error(
+          t('createCsvContactsFailed', { error: insertErr.message })
+        );
       }
       for (const c of (inserted ?? []) as Contact[]) {
         const key = normalizeKey(c.phone ?? '');
@@ -299,7 +301,9 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       .filter((c): c is Contact => Boolean(c));
   }
 
-  async function createAndSendBroadcast(payload: BroadcastPayload): Promise<BroadcastSendOutcome> {
+  async function createAndSendBroadcast(
+    payload: BroadcastPayload
+  ): Promise<BroadcastSendOutcome> {
     setIsProcessing(true);
     setProgress(0);
 
@@ -363,7 +367,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         throw new Error(
           t('createBroadcastFailed', {
             error: broadcastError?.message ?? t('unknownErrorLower'),
-          }),
+          })
         );
       }
 
@@ -378,7 +382,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       setProgress(20);
       const customValueIndex = await fetchCustomValueIndex(
         supabase,
-        contacts.map((c) => c.id),
+        contacts.map((c) => c.id)
       );
       const paramsByContact = new Map(
         contacts.map((contact) => [
@@ -386,9 +390,9 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
           resolveVariables(
             payload.variables,
             contact,
-            customValueIndex.get(contact.id),
+            customValueIndex.get(contact.id)
           ),
-        ]),
+        ])
       );
       const recipientRows = contacts.map((contact) => ({
         broadcast_id: broadcast.id,
@@ -420,7 +424,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             t('insertRecipientBatchFailed', {
               batch: i / INSERT_BATCH_SIZE + 1,
               error: recipientError.message,
-            }),
+            })
           );
         }
       }
@@ -429,14 +433,13 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       setProgress(30);
       let recipients: BroadcastRecipient[];
       try {
-        recipients = await fetchAllPages<BroadcastRecipient>(
-          (from, to) =>
-            supabase
-              .from('broadcast_recipients')
-              .select('*, contact:contacts(*)')
-              .eq('broadcast_id', broadcast.id)
-              .order('id')
-              .range(from, to),
+        recipients = await fetchAllPages<BroadcastRecipient>((from, to) =>
+          supabase
+            .from('broadcast_recipients')
+            .select('*, contact:contacts(*)')
+            .eq('broadcast_id', broadcast.id)
+            .order('id')
+            .range(from, to)
         );
       } catch {
         throw new Error(t('fetchRecipientsFailed'));
@@ -463,7 +466,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         heldLease = heldLeaseOrThrow(
           heldLease === null
             ? await acquireWizardDeliveryLease(supabase, broadcast.id)
-            : await renewWizardDeliveryLease(supabase, broadcast.id, heldLease),
+            : await renewWizardDeliveryLease(supabase, broadcast.id, heldLease)
         );
       };
       let interruption: BroadcastSendInterruption | null = null;
@@ -471,15 +474,21 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       for (let i = 0; i < recipients.length; i += SEND_BATCH_SIZE) {
         const batch = recipients.slice(i, i + SEND_BATCH_SIZE);
 
-        const apiRecipients = batch
-          .filter((r) => r.contact?.phone)
-          .map((r) => ({
-            phone: r.contact!.phone as string,
-            // Read back off the row rather than re-resolved, so this
-            // pass and any later resume send identical params.
-            params: Array.isArray(r.template_params) ? r.template_params : [],
-            ...(messageParams ? { messageParams } : {}),
-          }));
+        const apiRecipients = batch.flatMap((r) => {
+          const target = resolveContactSendTarget(r.contact);
+          if (!target) return [];
+          return [
+            {
+              ...(target.isPhone
+                ? { phone: target.target }
+                : { recipient: target.target }),
+              // Read back off the row rather than re-resolved, so this
+              // pass and any later resume send identical params.
+              params: Array.isArray(r.template_params) ? r.template_params : [],
+              ...(messageParams ? { messageParams } : {}),
+            },
+          ];
+        });
 
         if (apiRecipients.length === 0) continue;
 
@@ -528,8 +537,10 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
           }
 
           for (const recipient of batch) {
-            const phone = recipient.contact?.phone;
-            const result = phone ? resultsByPhone.get(phone) : undefined;
+            const target = resolveContactSendTarget(recipient.contact);
+            const result = target
+              ? resultsByPhone.get(target.target)
+              : undefined;
 
             if (!result) {
               failedCount++;
@@ -537,7 +548,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
                 .from('broadcast_recipients')
                 .update({
                   status: 'failed',
-                  error_message: t('noPhoneOnContact'),
+                  error_message: t('noSendIdentity'),
                 })
                 .eq('id', recipient.id);
               continue;
@@ -575,7 +586,8 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
               .from('broadcast_recipients')
               .update({
                 status: 'failed',
-                error_message: err instanceof Error ? err.message : t('unknownError'),
+                error_message:
+                  err instanceof Error ? err.message : t('unknownError'),
               })
               .eq('id', recipient.id);
           }

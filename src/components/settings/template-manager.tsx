@@ -11,7 +11,16 @@ import {
   X,
   Pencil,
   RotateCcw,
+  Search,
   Upload,
+  FileText,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  LayoutGrid,
+  Check,
+  ChevronDown,
+  Globe,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -27,6 +36,11 @@ import { useAuth } from '@/hooks/use-auth';
 import { fetchAccountTemplates } from '@/lib/settings/account-catalog';
 import { canEditTemplateCategory } from '@/lib/whatsapp/template-category-edit';
 import { Button } from '@/components/ui/button';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -63,7 +77,13 @@ import {
 
 const CATEGORIES = ['Marketing', 'Utility', 'Authentication'] as const;
 type HeaderFormat = 'none' | 'text' | 'image' | 'video' | 'document';
-const HEADER_FORMATS: HeaderFormat[] = ['none', 'text', 'image', 'video', 'document'];
+const HEADER_FORMATS: HeaderFormat[] = [
+  'none',
+  'text',
+  'image',
+  'video',
+  'document',
+];
 
 const categoryColors: Record<string, string> = {
   Marketing: 'bg-purple-600/20 text-purple-400 border-purple-600/30',
@@ -121,6 +141,101 @@ const COMMON_LANGUAGE_CODES = [
   'lt',
 ];
 
+function LanguageCombobox({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const t = useTranslations('Settings.templates');
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const uniqueCodes = useMemo(
+    () =>
+      Array.from(new Set([...COMMON_LANGUAGE_CODES, value].filter(Boolean))),
+    [value]
+  );
+  const term = query.trim().toLocaleLowerCase();
+  const filtered = uniqueCodes.filter((code) =>
+    code.toLocaleLowerCase().includes(term)
+  );
+  const canUseCustom =
+    !!term && !uniqueCodes.some((code) => code.toLocaleLowerCase() === term);
+
+  const pick = (code: string) => {
+    onChange(code);
+    setOpen(false);
+    setQuery('');
+  };
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setQuery('');
+      }}
+    >
+      <PopoverTrigger
+        disabled={disabled}
+        aria-label={t('language')}
+        className="border-border bg-muted text-foreground hover:bg-muted/80 flex h-8 w-full cursor-pointer items-center justify-between gap-2 rounded-lg border px-2.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <Globe className="text-muted-foreground size-3.5 shrink-0" />
+          <span className="truncate font-medium">{value || 'en_US'}</span>
+        </span>
+        <ChevronDown className="text-muted-foreground size-3.5 shrink-0" />
+      </PopoverTrigger>
+      <PopoverContent align="start" sideOffset={4} className="w-64 gap-0 p-0">
+        <div className="border-border border-b p-2">
+          <div className="relative">
+            <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
+            <Input
+              autoFocus
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t('languageSearchPlaceholder')}
+              className="bg-muted pl-8"
+            />
+          </div>
+        </div>
+        <div className="max-h-56 overflow-y-auto p-1">
+          {filtered.length === 0 && !canUseCustom ? (
+            <p className="text-muted-foreground px-2 py-3 text-center text-xs">
+              {t('languageNoResults')}
+            </p>
+          ) : (
+            filtered.map((code) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => pick(code)}
+                className="hover:bg-muted flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs"
+              >
+                <span className="text-foreground font-medium">{code}</span>
+                {code === value && <Check className="text-primary size-3.5" />}
+              </button>
+            ))
+          )}
+          {canUseCustom && (
+            <button
+              type="button"
+              onClick={() => pick(query.trim())}
+              className="text-primary hover:bg-primary/10 mt-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium"
+            >
+              {t('languageUseCustom', { code: query.trim() })}
+            </button>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 function emptyButton(type: TemplateButton['type']): TemplateButton {
   switch (type) {
     case 'QUICK_REPLY':
@@ -138,7 +253,9 @@ export function TemplateManager() {
   const t = useTranslations('Settings.templates');
   // Meta's category ids (stored as-is) → display label in the UI language.
   const categoryLabel = (category: string) =>
-    t.has(`categoryLabels.${category}`) ? t(`categoryLabels.${category}`) : category;
+    t.has(`categoryLabels.${category}`)
+      ? t(`categoryLabels.${category}`)
+      : category;
   const supabase = createClient();
   const { user, accountId, loading: authLoading } = useAuth();
 
@@ -146,6 +263,8 @@ export function TemplateManager() {
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [channelFilter, setChannelFilter] = useState<string>('__all__');
+  const [statusFilter, setStatusFilter] = useState<string>('__all__');
+  const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -155,9 +274,12 @@ export function TemplateManager() {
   // dialog title + CTA. Set to the template id to pre-fill from a row.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const editingTemplate = templates.find((template) => template.id === editingId);
+  const editingTemplate = templates.find(
+    (template) => template.id === editingId
+  );
   const categoryLocked =
-    editingTemplate !== undefined && !canEditTemplateCategory(editingTemplate.status);
+    editingTemplate !== undefined &&
+    !canEditTemplateCategory(editingTemplate.status);
   // Template selected for the confirm-delete dialog. The destructive
   // action goes through this two-step so a slip on the trash icon
   // doesn't take the template off Meta as well as locally.
@@ -175,14 +297,14 @@ export function TemplateManager() {
   // in sync with what the user typed.
   const bodyVarCount = useMemo(
     () => extractVariableIndices(form.body_text).length,
-    [form.body_text],
+    [form.body_text]
   );
   const headerVarCount = useMemo(
     () =>
       form.header_format === 'text'
         ? extractVariableIndices(form.header_content).length
         : 0,
-    [form.header_format, form.header_content],
+    [form.header_format, form.header_content]
   );
 
   // Resize body_samples so it always has exactly bodyVarCount entries.
@@ -236,7 +358,8 @@ export function TemplateManager() {
       channel_id: form.channel_id,
       category: form.category,
       language: form.language.trim() || 'en_US',
-      header_type: form.header_format === 'none' ? undefined : form.header_format,
+      header_type:
+        form.header_format === 'none' ? undefined : form.header_format,
       header_content:
         form.header_format === 'text' ? form.header_content.trim() : undefined,
       header_media_url:
@@ -275,9 +398,7 @@ export function TemplateManager() {
     setForm({
       ...emptyForm,
       channel_id:
-        channelFilter !== '__all__'
-          ? channelFilter
-          : (channels[0]?.id ?? null),
+        channelFilter !== '__all__' ? channelFilter : (channels[0]?.id ?? null),
     });
     setDialogOpen(true);
   }
@@ -300,7 +421,10 @@ export function TemplateManager() {
       const data = await res.json();
       if (!res.ok) {
         throw new Error(
-          data?.error || t(isEdit ? 'editFailedHttp' : 'submitFailedHttp', { status: res.status }),
+          data?.error ||
+            t(isEdit ? 'editFailedHttp' : 'submitFailedHttp', {
+              status: res.status,
+            })
         );
       }
       // Refresh first, then close — re-opening the dialog
@@ -313,7 +437,7 @@ export function TemplateManager() {
             : t('toastSaveNewDry')
           : isEdit
             ? t('toastSubmitEditSuccess')
-            : t('toastSubmitNewSuccess'),
+            : t('toastSubmitNewSuccess')
       );
       setDialogOpen(false);
       setForm(emptyForm);
@@ -330,34 +454,44 @@ export function TemplateManager() {
     if (!user) return;
     setSyncing(true);
     try {
-      const res = await fetch('/api/whatsapp/templates/sync', { method: 'POST' });
+      const res = await fetch('/api/whatsapp/templates/sync', {
+        method: 'POST',
+      });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data?.error || t('syncFailedHttp', { status: res.status }));
+        throw new Error(
+          data?.error || t('syncFailedHttp', { status: res.status })
+        );
       }
       toast.success(
         t('toastSyncCount', { total: data.total }) +
           (data.inserted || data.updated
-            ? t('toastSyncDetails', { inserted: data.inserted, updated: data.updated })
-            : ''),
+            ? t('toastSyncDetails', {
+                inserted: data.inserted,
+                updated: data.updated,
+              })
+            : '')
       );
       if (Array.isArray(data.errors) && data.errors.length > 0) {
-        const preview = data.errors.slice(0, 3).map(
-          (e: { name: string; language: string; message: string }) =>
-            `${e.name} (${e.language})`,
-        );
+        const preview = data.errors
+          .slice(0, 3)
+          .map(
+            (e: { name: string; language: string; message: string }) =>
+              `${e.name} (${e.language})`
+          );
         const suffix =
-          data.errors.length > 3 ? t('syncMoreSuffix', { count: data.errors.length - 3 }) : '';
-        toast.error(t('toastSyncFailed', { preview: preview.join(', ') + suffix }));
+          data.errors.length > 3
+            ? t('syncMoreSuffix', { count: data.errors.length - 3 })
+            : '';
+        toast.error(
+          t('toastSyncFailed', { preview: preview.join(', ') + suffix })
+        );
       }
       if (data.truncated) {
         // Use error (not warning) so the message survives long
         // enough to read — sonner's `warning` auto-dismisses on
         // the same short timer as `success`.
-        toast.error(
-          t('toastSyncTruncated'),
-          { duration: 10000 },
-        );
+        toast.error(t('toastSyncTruncated'), { duration: 10000 });
       }
       if (accountId) await fetchTemplates(accountId);
     } catch (err) {
@@ -381,7 +515,9 @@ export function TemplateManager() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data?.error || t('deleteFailedHttp', { status: res.status }));
+        throw new Error(
+          data?.error || t('deleteFailedHttp', { status: res.status })
+        );
       }
       toast.success(t('toastDeleteSuccess'));
       setTemplates((prev) => prev.filter((t) => t.id !== target.id));
@@ -475,7 +611,7 @@ export function TemplateManager() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="size-6 animate-spin text-primary" />
+        <Loader2 className="text-primary size-6 animate-spin" />
       </div>
     );
   }
@@ -483,7 +619,7 @@ export function TemplateManager() {
   const headerNeedsMedia =
     form.header_format !== 'none' && form.header_format !== 'text';
   const headerMediaKind: MediaHeaderKind | null = isMediaHeaderKind(
-    form.header_format,
+    form.header_format
   )
     ? form.header_format
     : null;
@@ -520,7 +656,7 @@ export function TemplateManager() {
         t('toastMediaTooLarge', {
           size: (file.size / 1024 / 1024).toFixed(1),
           max: Math.round(maxBytes / 1024 / 1024),
-        }),
+        })
       );
       return;
     }
@@ -536,10 +672,49 @@ export function TemplateManager() {
     }
   }
 
-  const visibleTemplates =
-    channelFilter === '__all__'
-      ? templates
-      : templates.filter((template) => template.channel_id === channelFilter);
+  const filteredTemplates = (() => {
+    const term = search.trim().toLocaleLowerCase();
+    return templates.filter((template) => {
+      if (
+        channelFilter !== '__all__' &&
+        template.channel_id !== channelFilter
+      ) {
+        return false;
+      }
+      const status = template.status || 'DRAFT';
+      if (statusFilter !== '__all__' && status !== statusFilter) return false;
+      if (!term) return true;
+      const channel = channels.find((c) => c.id === template.channel_id);
+      return [
+        template.name,
+        template.body_text,
+        template.footer_text,
+        template.language,
+        template.category,
+        channel?.name,
+      ]
+        .filter(Boolean)
+        .some((value) => value!.toLocaleLowerCase().includes(term));
+    });
+  })();
+
+  const stats = (() => {
+    const count = (statuses: string[]) =>
+      templates.filter((template) =>
+        statuses.includes(template.status || 'DRAFT')
+      ).length;
+    return {
+      total: templates.length,
+      approved: count(['APPROVED']),
+      pending: count(['PENDING', 'IN_APPEAL']),
+      attention: count(['REJECTED', 'PAUSED', 'DISABLED']),
+    };
+  })();
+
+  const hasActiveFilters =
+    channelFilter !== '__all__' ||
+    statusFilter !== '__all__' ||
+    !!search.trim();
 
   return (
     <section className="animate-in fade-in-50 space-y-4 duration-200">
@@ -548,31 +723,15 @@ export function TemplateManager() {
         description={t('description')}
         action={
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {channels.length > 0 && (
-              <Select
-                value={channelFilter}
-                onValueChange={(value) => setChannelFilter(value ?? '__all__')}
-              >
-                <SelectTrigger className="w-44 bg-muted border-border text-foreground">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">{t('allChannels')}</SelectItem>
-                  {channels.map((channel) => (
-                    <SelectItem key={channel.id} value={channel.id}>
-                      {channel.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
             <Button
               variant="outline"
               onClick={handleSyncFromMeta}
               disabled={syncing}
               title={t('syncTitle')}
             >
-              <RefreshCw className={`size-4 ${syncing ? 'animate-spin' : ''}`} />
+              <RefreshCw
+                className={syncing ? 'size-4 animate-spin' : 'size-4'}
+              />
               {syncing ? t('syncing') : t('syncFromMeta')}
             </Button>
             <Button onClick={openCreate}>
@@ -583,82 +742,272 @@ export function TemplateManager() {
         }
       />
 
-      {visibleTemplates.length === 0 ? (
+      <div className="border-border bg-card flex flex-col gap-3 rounded-xl border p-3 lg:flex-row lg:items-center">
+        <div className="relative flex-1">
+          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={t('searchPlaceholder')}
+            className="bg-muted border-border text-foreground placeholder:text-muted-foreground pl-9"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            value={statusFilter}
+            onValueChange={(value) => setStatusFilter(value ?? '__all__')}
+          >
+            <SelectTrigger className="bg-muted border-border text-foreground w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">{t('allStatuses')}</SelectItem>
+              {Object.keys(templateStatusConfig).map((statusKey) => (
+                <SelectItem key={statusKey} value={statusKey}>
+                  {
+                    templateStatusConfig[
+                      statusKey as keyof typeof templateStatusConfig
+                    ].label
+                  }
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {channels.length > 0 && (
+            <Select
+              value={channelFilter}
+              onValueChange={(value) => setChannelFilter(value ?? '__all__')}
+            >
+              <SelectTrigger className="bg-muted border-border text-foreground w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">{t('allChannels')}</SelectItem>
+                {channels.map((channel) => (
+                  <SelectItem key={channel.id} value={channel.id}>
+                    {channel.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {hasActiveFilters && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearch('');
+                setStatusFilter('__all__');
+                setChannelFilter('__all__');
+              }}
+            >
+              <X className="size-3.5" />
+              {t('clearFilters')}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="border-border bg-card flex items-center gap-3 rounded-xl border p-3">
+          <span className="bg-primary/10 text-primary flex size-9 items-center justify-center rounded-lg">
+            <LayoutGrid className="size-4" />
+          </span>
+          <div>
+            <p className="text-muted-foreground text-[11px]">
+              {t('statsTotal')}
+            </p>
+            <p className="text-foreground text-xl font-semibold tabular-nums">
+              {stats.total}
+            </p>
+          </div>
+        </div>
+        <div className="border-border bg-card flex items-center gap-3 rounded-xl border p-3">
+          <span className="flex size-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
+            <CheckCircle2 className="size-4" />
+          </span>
+          <div>
+            <p className="text-muted-foreground text-[11px]">
+              {t('statsApproved')}
+            </p>
+            <p className="text-foreground text-xl font-semibold tabular-nums">
+              {stats.approved}
+            </p>
+          </div>
+        </div>
+        <div className="border-border bg-card flex items-center gap-3 rounded-xl border p-3">
+          <span className="flex size-9 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
+            <Clock className="size-4" />
+          </span>
+          <div>
+            <p className="text-muted-foreground text-[11px]">
+              {t('statsPending')}
+            </p>
+            <p className="text-foreground text-xl font-semibold tabular-nums">
+              {stats.pending}
+            </p>
+          </div>
+        </div>
+        <div className="border-border bg-card flex items-center gap-3 rounded-xl border p-3">
+          <span className="flex size-9 items-center justify-center rounded-lg bg-red-500/10 text-red-500">
+            <AlertTriangle className="size-4" />
+          </span>
+          <div>
+            <p className="text-muted-foreground text-[11px]">
+              {t('statsAttention')}
+            </p>
+            <p className="text-foreground text-xl font-semibold tabular-nums">
+              {stats.attention}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {templates.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <p className="text-muted-foreground text-sm">{t('noTemplates')}</p>
-            <p className="text-muted-foreground text-xs mt-1">
+          <CardContent className="flex flex-col items-center justify-center py-14 text-center">
+            <FileText className="text-muted-foreground/50 size-8" />
+            <p className="text-foreground mt-3 text-sm font-medium">
+              {t('noTemplates')}
+            </p>
+            <p className="text-muted-foreground mt-1 text-xs">
               {t('createFirst')}
             </p>
           </CardContent>
         </Card>
+      ) : filteredTemplates.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-14 text-center">
+            <Search className="text-muted-foreground/50 size-8" />
+            <p className="text-foreground mt-3 text-sm font-medium">
+              {t('noMatches')}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={() => {
+                setSearch('');
+                setStatusFilter('__all__');
+                setChannelFilter('__all__');
+              }}
+            >
+              {t('clearFilters')}
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="grid gap-3 xl:grid-cols-2">
-          {visibleTemplates.map((template) => {
-            const statusKey = template.status || 'DRAFT';
-            const status = templateStatusConfig[statusKey];
-            const channel = channels.find((c) => c.id === template.channel_id);
-            return (
-              <Card key={template.id}>
-                <CardContent className="flex items-start justify-between pt-4">
-                  <div className="space-y-2 min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-medium text-foreground">{template.name}</h3>
-                      <Badge
-                        className={`text-xs border ${categoryColors[template.category] || ''}`}
-                      >
-                        {categoryLabel(template.category)}
-                      </Badge>
-                      <Badge className={`text-xs border ${status.classes}`}>
-                        {status.label}
-                      </Badge>
-                      {template.language && (
-                        <span className="text-xs text-muted-foreground uppercase">
-                          {template.language}
-                        </span>
-                      )}
-                      {channel && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+        <Card className="overflow-hidden">
+          <div className="border-border text-muted-foreground hidden grid-cols-[minmax(0,1.8fr)_130px_130px_170px_110px] items-center gap-3 border-b px-4 py-2.5 text-[10px] font-semibold tracking-wide uppercase lg:grid">
+            <span>{t('tableTemplate')}</span>
+            <span>{t('tableStatus')}</span>
+            <span>{t('tableCategory')}</span>
+            <span>{t('tableChannel')}</span>
+            <span className="text-right">{t('tableActions')}</span>
+          </div>
+          <div className="border-border text-muted-foreground border-b px-4 py-2 text-[11px]">
+            {t('resultsCount', {
+              shown: filteredTemplates.length,
+              total: templates.length,
+            })}
+          </div>
+          <ul className="divide-border divide-y">
+            {filteredTemplates.map((template) => {
+              const statusKey = template.status || 'DRAFT';
+              const status = templateStatusConfig[statusKey];
+              const channel = channels.find(
+                (c) => c.id === template.channel_id
+              );
+              return (
+                <li
+                  key={template.id}
+                  className="hover:bg-muted/30 grid gap-3 px-4 py-4 transition-colors lg:grid-cols-[minmax(0,1.8fr)_130px_130px_170px_110px] lg:items-center"
+                >
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span className="bg-primary/10 text-primary mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg">
+                      <FileText className="size-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-foreground truncate text-sm font-semibold">
+                          {template.name}
+                        </h3>
+                        {template.quality_score && (
                           <span
-                            className="h-1.5 w-1.5 rounded-full"
-                            style={{ backgroundColor: channel.color }}
-                          />
-                          {channel.name}
-                        </span>
+                            className={
+                              'text-[9px] font-semibold uppercase ' +
+                              (template.quality_score === 'GREEN'
+                                ? 'text-emerald-500'
+                                : template.quality_score === 'YELLOW'
+                                  ? 'text-amber-500'
+                                  : 'text-red-500')
+                            }
+                            title={t('qualityScoreTitle')}
+                          >
+                            {template.quality_score}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-muted-foreground mt-1 line-clamp-2 text-xs leading-relaxed">
+                        {template.body_text}
+                      </p>
+                      {template.footer_text && (
+                        <p className="text-muted-foreground mt-1 line-clamp-1 text-[11px] italic">
+                          {template.footer_text}
+                        </p>
                       )}
-                      {template.quality_score && (
-                        <span
-                          className={`text-[10px] uppercase font-medium ${
-                            template.quality_score === 'GREEN'
-                              ? 'text-emerald-400'
-                              : template.quality_score === 'YELLOW'
-                                ? 'text-yellow-400'
-                                : 'text-red-400'
-                          }`}
-                          title={t('qualityScoreTitle')}
-                        >
-                          {template.quality_score}
-                        </span>
+                      {(template.rejection_reason ||
+                        template.submission_error) && (
+                        <div className="mt-1.5 flex items-start gap-1.5 rounded border border-red-900/40 bg-red-950/20 px-2 py-1.5 text-[11px] text-red-400">
+                          <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+                          <span>
+                            {template.rejection_reason ||
+                              template.submission_error}
+                          </span>
+                        </div>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {template.body_text}
-                    </p>
-                    {template.footer_text && (
-                      <p className="text-xs text-muted-foreground italic">
-                        {template.footer_text}
-                      </p>
+                  </div>
+
+                  <div>
+                    <Badge className={'border text-[10px] ' + status.classes}>
+                      {status.label}
+                    </Badge>
+                  </div>
+
+                  <div>
+                    <Badge
+                      className={
+                        'border text-[10px] ' +
+                        (categoryColors[template.category] || '')
+                      }
+                    >
+                      {categoryLabel(template.category)}
+                    </Badge>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                    {channel ? (
+                      <span className="border-border bg-muted text-muted-foreground inline-flex items-center gap-1 rounded-full border px-2 py-0.5">
+                        <span
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{ backgroundColor: channel.color }}
+                        />
+                        {channel.name}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
                     )}
-                    {(template.rejection_reason || template.submission_error) && (
-                      <div className="flex items-start gap-1.5 text-xs text-red-400 bg-red-950/20 border border-red-900/40 rounded px-2 py-1.5">
-                        <AlertCircle className="size-3.5 mt-0.5 shrink-0" />
-                        <span>
-                          {template.rejection_reason || template.submission_error}
-                        </span>
-                      </div>
+                    {template.language && (
+                      <span className="text-muted-foreground uppercase">
+                        {template.language}
+                      </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 shrink-0 ml-2">
+
+                  <div className="flex items-center gap-1 lg:justify-end">
                     {statusKey === 'APPROVED' && (
                       <Button
                         variant="ghost"
@@ -669,7 +1018,7 @@ export function TemplateManager() {
                         className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-8 px-2"
                       >
                         <Pencil className="size-3.5" />
-                        {t('edit')}
+                        <span className="hidden xl:inline">{t('edit')}</span>
                       </Button>
                     )}
                     {(statusKey === 'REJECTED' || statusKey === 'PAUSED') && (
@@ -682,7 +1031,9 @@ export function TemplateManager() {
                         className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-8 px-2"
                       >
                         <RotateCcw className="size-3.5" />
-                        {t('resubmit')}
+                        <span className="hidden xl:inline">
+                          {t('resubmit')}
+                        </span>
                       </Button>
                     )}
                     <Button
@@ -700,7 +1051,7 @@ export function TemplateManager() {
                           ? t('deleteMetaLocallyTitle')
                           : t('deleteLocallyTitle')
                       }
-                      className="text-muted-foreground hover:text-red-400 hover:bg-red-950/30 h-8 w-8"
+                      className="text-muted-foreground h-8 w-8 hover:bg-red-950/30 hover:text-red-400"
                     >
                       {deletingId === template.id ? (
                         <Loader2 className="size-4 animate-spin" />
@@ -709,11 +1060,11 @@ export function TemplateManager() {
                       )}
                     </Button>
                   </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
       )}
 
       <Dialog
@@ -726,454 +1077,479 @@ export function TemplateManager() {
           }
         }}
       >
-        <DialogContent className="bg-popover border-border sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="bg-popover border-border flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
+          <DialogHeader className="border-border border-b px-5 py-4">
             <DialogTitle className="text-popover-foreground">
               {editingId ? t('dialogEditTitle') : t('dialogNewTitle')}
             </DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              {editingId
-                ? t('dialogEditDesc')
-                : t('dialogNewDesc')}
+              {editingId ? t('dialogEditDesc') : t('dialogNewDesc')}
             </DialogDescription>
           </DialogHeader>
 
-          {form.category === 'Authentication' && (
-            <div className="flex items-start gap-2 rounded border border-amber-700/40 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
-              <AlertCircle className="size-4 mt-0.5 shrink-0" />
-              <p>{t.rich('authWarning', { bold: (chunks) => <strong>{chunks}</strong> })}</p>
-            </div>
-          )}
-
-          <div className="space-y-4 py-2">
-            {channels.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-muted-foreground">
-                  {t('templateChannel')}
-                </Label>
-                <Select
-                  value={form.channel_id ?? channels[0]?.id ?? ''}
-                  onValueChange={(value) =>
-                    setForm({ ...form, channel_id: value ?? null })
-                  }
-                  disabled={editingId !== null}
-                >
-                  <SelectTrigger className="w-full bg-muted border-border text-foreground">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover border-border">
-                    {channels.map((channel) => (
-                      <SelectItem key={channel.id} value={channel.id}>
-                        {channel.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+            {form.category === 'Authentication' && (
+              <div className="flex items-start gap-2 rounded border border-amber-700/40 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
+                <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                <p>
+                  {t.rich('authWarning', {
+                    bold: (chunks) => <strong>{chunks}</strong>,
+                  })}
+                </p>
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label className="text-muted-foreground">{t('templateName')}</Label>
-              <Input
-                placeholder={t('namePlaceholder')}
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                disabled={editingId !== null}
-                className="bg-muted border-border text-foreground placeholder:text-muted-foreground disabled:opacity-60 disabled:cursor-not-allowed"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                {editingId
-                  ? t('nameFixed')
-                  : t('nameHint')}
-              </p>
-            </div>
+            <div className="space-y-4 py-2">
+              <div className="text-muted-foreground flex items-center gap-2 text-[10px] font-semibold tracking-[0.12em] uppercase">
+                <FileText className="text-primary size-3.5" />
+                {t('sectionBasic')}
+              </div>
+              {channels.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">
+                    {t('templateChannel')}
+                  </Label>
+                  <Select
+                    value={form.channel_id ?? channels[0]?.id ?? ''}
+                    onValueChange={(value) =>
+                      setForm({ ...form, channel_id: value ?? null })
+                    }
+                    disabled={editingId !== null}
+                  >
+                    <SelectTrigger className="bg-muted border-border text-foreground w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover border-border">
+                      {channels.map((channel) => (
+                        <SelectItem key={channel.id} value={channel.id}>
+                          {channel.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-muted-foreground">{t('category')}</Label>
+                <Label className="text-muted-foreground">
+                  {t('templateName')}
+                </Label>
+                <Input
+                  placeholder={t('namePlaceholder')}
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  disabled={editingId !== null}
+                  className="bg-muted border-border text-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                />
+                <p className="text-muted-foreground text-[11px]">
+                  {editingId ? t('nameFixed') : t('nameHint')}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">
+                    {t('category')}
+                  </Label>
+                  <Select
+                    value={form.category}
+                    onValueChange={(val) =>
+                      setForm({
+                        ...form,
+                        category: val as MessageTemplate['category'],
+                      })
+                    }
+                    disabled={categoryLocked}
+                  >
+                    <SelectTrigger className="bg-muted border-border text-foreground w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover border-border">
+                      {CATEGORIES.map((cat) => (
+                        <SelectItem
+                          key={cat}
+                          value={cat}
+                          className="text-popover-foreground focus:bg-muted focus:text-popover-foreground"
+                        >
+                          {categoryLabel(cat)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {categoryLocked && (
+                    <p className="text-muted-foreground text-[11px]">
+                      {t('categoryFixed')}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">
+                    {t('language')}
+                  </Label>
+                  <LanguageCombobox
+                    value={form.language}
+                    onChange={(language) => setForm({ ...form, language })}
+                    disabled={editingId !== null}
+                  />
+                  <p className="text-muted-foreground text-[11px]">
+                    {editingId ? (
+                      t('langFixed')
+                    ) : (
+                      <span>
+                        {t.rich('langHint', {
+                          code: (chunks) => <code>{chunks}</code>,
+                        })}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-border text-muted-foreground flex items-center gap-2 border-t pt-4 text-[10px] font-semibold tracking-[0.12em] uppercase">
+                <FileText className="text-primary size-3.5" />
+                {t('sectionContent')}
+              </div>
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">{t('header')}</Label>
                 <Select
-                  value={form.category}
+                  value={form.header_format}
                   onValueChange={(val) =>
+                    // Preserve header_content, header_media_url, and
+                    // header_sample across format switches. The submit
+                    // payload builder only reads the field that matches
+                    // the active format, so an orphan value on a hidden
+                    // field is harmless — and keeping it lets the user
+                    // switch formats to compare without losing typing.
                     setForm({
                       ...form,
-                      category: val as MessageTemplate['category'],
+                      header_format: (val || 'none') as HeaderFormat,
                     })
                   }
-                  disabled={categoryLocked}
                 >
-                  <SelectTrigger className="w-full bg-muted border-border text-foreground">
+                  <SelectTrigger className="bg-muted border-border text-foreground w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-popover border-border">
-                    {CATEGORIES.map((cat) => (
+                    {HEADER_FORMATS.map((type) => (
                       <SelectItem
-                        key={cat}
-                        value={cat}
+                        key={type}
+                        value={type}
                         className="text-popover-foreground focus:bg-muted focus:text-popover-foreground"
                       >
-                        {categoryLabel(cat)}
+                        {type === 'none'
+                          ? t('headerNone')
+                          : type === 'text'
+                            ? t('headerText')
+                            : type === 'image'
+                              ? t('headerImage')
+                              : type === 'video'
+                                ? t('headerVideo')
+                                : t('headerDocument')}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {categoryLocked && (
-                  <p className="text-[11px] text-muted-foreground">
-                    {t('categoryFixed')}
-                  </p>
+
+                {form.header_format === 'text' && (
+                  <div className="mt-2 space-y-2">
+                    <Input
+                      id="template-header-text"
+                      aria-label={t('headerTextLabel')}
+                      placeholder={t.raw('headerTextPlaceholder')}
+                      value={form.header_content}
+                      onChange={(e) =>
+                        setForm({ ...form, header_content: e.target.value })
+                      }
+                      maxLength={TEMPLATE_LIMITS.headerTextMaxLength}
+                      className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
+                    />
+                    {headerVarCount > 0 && (
+                      <Input
+                        id="template-header-sample"
+                        aria-label={t('headerSampleAria')}
+                        placeholder={t.raw('headerSamplePlaceholder')}
+                        value={form.header_sample}
+                        onChange={(e) =>
+                          setForm({ ...form, header_sample: e.target.value })
+                        }
+                        className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
+                      />
+                    )}
+                  </div>
+                )}
+
+                {headerNeedsMedia && (
+                  <div className="mt-2 space-y-2">
+                    {headerMediaKind && (
+                      <div className="flex items-center gap-2">
+                        <input
+                          ref={headerFileRef}
+                          type="file"
+                          accept={MEDIA_HEADER_SPECS[
+                            headerMediaKind
+                          ].mimeTypes.join(',')}
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f)
+                              void handleHeaderMediaFile(f, headerMediaKind);
+                            e.target.value = '';
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={uploadingHeader}
+                          onClick={() => headerFileRef.current?.click()}
+                        >
+                          {uploadingHeader ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Upload className="h-3.5 w-3.5" />
+                          )}
+                          {t(uploadLabelKey[headerMediaKind])}
+                        </Button>
+                        <span className="text-muted-foreground text-[11px]">
+                          {t(uploadHintKey[headerMediaKind])}
+                        </span>
+                      </div>
+                    )}
+                    <Input
+                      placeholder={t('mediaUrlPlaceholder', {
+                        format: form.header_format,
+                      })}
+                      value={form.header_media_url}
+                      onChange={(e) =>
+                        setForm({ ...form, header_media_url: e.target.value })
+                      }
+                      className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
+                    />
+                    {form.header_format === 'image' &&
+                      form.header_media_url && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={form.header_media_url}
+                          alt={t('headerSampleAlt')}
+                          className="border-border max-h-28 rounded-md border object-contain"
+                        />
+                      )}
+                    <p className="text-muted-foreground text-[11px] leading-relaxed">
+                      {form.header_format === 'image'
+                        ? t('imageHint')
+                        : t('mediaHint')}
+                      {form.header_format === 'video' && t('videoHint')}
+                      {form.header_format === 'document' && t('documentHint')}
+                    </p>
+                  </div>
                 )}
               </div>
 
               <div className="space-y-2">
-                <Label className="text-muted-foreground">{t('language')}</Label>
-                <Input
-                  list="template-language-codes"
-                  placeholder="en_US"
-                  value={form.language}
+                <Label className="text-muted-foreground">{t('bodyText')}</Label>
+                <Textarea
+                  placeholder={t.raw('bodyPlaceholder')}
+                  value={form.body_text}
                   onChange={(e) =>
-                    setForm({ ...form, language: e.target.value })
+                    setForm({ ...form, body_text: e.target.value })
                   }
-                  disabled={editingId !== null}
-                  className="bg-muted border-border text-foreground placeholder:text-muted-foreground disabled:opacity-60 disabled:cursor-not-allowed"
+                  rows={4}
+                  maxLength={TEMPLATE_LIMITS.bodyMaxLength}
+                  className="bg-muted border-border text-foreground placeholder:text-muted-foreground resize-none"
                 />
-                <datalist id="template-language-codes">
-                  {COMMON_LANGUAGE_CODES.map((code) => (
-                    <option key={code} value={code} />
-                  ))}
-                </datalist>
-                <p className="text-[11px] text-muted-foreground">
-                  {editingId ? (
-                    t('langFixed')
-                  ) : (
-                    <span>{t.rich('langHint', { code: (chunks) => <code>{chunks}</code> })}</span>
-                  )}
+                <p className="text-muted-foreground text-[11px]">
+                  {t.raw('bodyHint')}
                 </p>
-              </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label className="text-muted-foreground">{t('header')}</Label>
-              <Select
-                value={form.header_format}
-                onValueChange={(val) =>
-                  // Preserve header_content, header_media_url, and
-                  // header_sample across format switches. The submit
-                  // payload builder only reads the field that matches
-                  // the active format, so an orphan value on a hidden
-                  // field is harmless — and keeping it lets the user
-                  // switch formats to compare without losing typing.
-                  setForm({
-                    ...form,
-                    header_format: (val || 'none') as HeaderFormat,
-                  })
-                }
-              >
-                <SelectTrigger className="w-full bg-muted border-border text-foreground">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-popover border-border">
-                  {HEADER_FORMATS.map((type) => (
-                    <SelectItem
-                      key={type}
-                      value={type}
-                      className="text-popover-foreground focus:bg-muted focus:text-popover-foreground"
-                    >
-                      {type === 'none'
-                        ? t('headerNone')
-                        : type === 'text'
-                          ? t('headerText')
-                          : type === 'image'
-                            ? t('headerImage')
-                            : type === 'video'
-                              ? t('headerVideo')
-                              : t('headerDocument')}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {form.header_format === 'text' && (
-                <div className="space-y-2 mt-2">
-                  <Input
-                    id="template-header-text"
-                    aria-label={t('headerTextLabel')}
-                    placeholder={t.raw('headerTextPlaceholder')}
-                    value={form.header_content}
-                    onChange={(e) =>
-                      setForm({ ...form, header_content: e.target.value })
-                    }
-                    maxLength={TEMPLATE_LIMITS.headerTextMaxLength}
-                    className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
-                  />
-                  {headerVarCount > 0 && (
-                    <Input
-                      id="template-header-sample"
-                      aria-label={t('headerSampleAria')}
-                      placeholder={t.raw('headerSamplePlaceholder')}
-                      value={form.header_sample}
-                      onChange={(e) =>
-                        setForm({ ...form, header_sample: e.target.value })
-                      }
-                      className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
-                    />
-                  )}
-                </div>
-              )}
-
-              {headerNeedsMedia && (
-                <div className="space-y-2 mt-2">
-                  {headerMediaKind && (
-                    <div className="flex items-center gap-2">
-                      <input
-                        ref={headerFileRef}
-                        type="file"
-                        accept={MEDIA_HEADER_SPECS[headerMediaKind].mimeTypes.join(',')}
-                        className="hidden"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) void handleHeaderMediaFile(f, headerMediaKind);
-                          e.target.value = '';
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={uploadingHeader}
-                        onClick={() => headerFileRef.current?.click()}
-                      >
-                        {uploadingHeader ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Upload className="h-3.5 w-3.5" />
-                        )}
-                        {t(uploadLabelKey[headerMediaKind])}
-                      </Button>
-                      <span className="text-[11px] text-muted-foreground">
-                        {t(uploadHintKey[headerMediaKind])}
-                      </span>
-                    </div>
-                  )}
-                  <Input
-                    placeholder={t('mediaUrlPlaceholder', { format: form.header_format })}
-                    value={form.header_media_url}
-                    onChange={(e) =>
-                      setForm({ ...form, header_media_url: e.target.value })
-                    }
-                    className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
-                  />
-                  {form.header_format === 'image' && form.header_media_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={form.header_media_url}
-                      alt={t('headerSampleAlt')}
-                      className="max-h-28 rounded-md border border-border object-contain"
-                    />
-                  )}
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    {form.header_format === 'image'
-                      ? t('imageHint')
-                      : t('mediaHint')}
-                    {form.header_format === 'video' &&
-                      t('videoHint')}
-                    {form.header_format === 'document' &&
-                      t('documentHint')}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-muted-foreground">{t('bodyText')}</Label>
-              <Textarea
-                placeholder={t.raw('bodyPlaceholder')}
-                value={form.body_text}
-                onChange={(e) =>
-                  setForm({ ...form, body_text: e.target.value })
-                }
-                rows={4}
-                maxLength={TEMPLATE_LIMITS.bodyMaxLength}
-                className="bg-muted border-border text-foreground placeholder:text-muted-foreground resize-none"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                {t.raw('bodyHint')}
-              </p>
-
-              {bodyVarCount > 0 && (
-                <div className="space-y-1.5 pt-1">
-                  <Label className="text-[11px] text-muted-foreground">
-                    {t('sampleValues')}
-                  </Label>
-                  {form.body_samples.map((val, i) => {
-                    const inputId = `template-body-sample-${i}`;
-                    return (
-                      <Input
-                        key={i}
-                        id={inputId}
-                        aria-label={t('sampleAria', { var: `{{${i + 1}}}` })}
-                        placeholder={t('samplePlaceholder', { var: `{{${i + 1}}}` })}
-                        value={val}
-                        onChange={(e) => {
-                          const next = [...form.body_samples];
-                          next[i] = e.target.value;
-                          setForm({ ...form, body_samples: next });
-                        }}
-                        className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
-                      />
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-muted-foreground">{t('footer')}</Label>
-              <Input
-                placeholder={t('footerPlaceholder')}
-                value={form.footer_text}
-                onChange={(e) =>
-                  setForm({ ...form, footer_text: e.target.value })
-                }
-                maxLength={TEMPLATE_LIMITS.footerMaxLength}
-                className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-muted-foreground">{t('buttons')}</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addButton}
-                  disabled={form.buttons.length >= TEMPLATE_LIMITS.maxButtonsTotal}
-                  className="border-border bg-transparent text-muted-foreground hover:bg-muted h-7 text-xs"
-                >
-                  <Plus className="size-3" />
-                  {t('addButton')}
-                </Button>
-              </div>
-              {form.buttons.length === 0 ? (
-                <p className="text-[11px] text-muted-foreground">
-                  {t('buttonsLimit', { max: TEMPLATE_LIMITS.maxButtonsTotal })}
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {form.buttons.map((btn, i) => (
-                    <div
-                      key={i}
-                      className="space-y-2 rounded border border-border bg-muted/50 p-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Select
-                          value={btn.type}
-                          onValueChange={(val) => {
-                            // Same null guard as the Header Select
-                            // (per PR 148): @base-ui Select fires
-                            // onValueChange(null) on deselect.
-                            if (!val) return;
-                            changeButtonType(i, val as TemplateButton['type']);
-                          }}
-                        >
-                          <SelectTrigger className="w-40 bg-muted border-border text-foreground h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-popover border-border">
-                            <SelectItem
-                              value="QUICK_REPLY"
-                              className="text-popover-foreground focus:bg-muted focus:text-popover-foreground"
-                            >
-                              {t('btnQuickReply')}
-                            </SelectItem>
-                            <SelectItem
-                              value="URL"
-                              className="text-popover-foreground focus:bg-muted focus:text-popover-foreground"
-                            >
-                              {t('btnUrl')}
-                            </SelectItem>
-                            <SelectItem
-                              value="PHONE_NUMBER"
-                              className="text-popover-foreground focus:bg-muted focus:text-popover-foreground"
-                            >
-                              {t('btnPhone')}
-                            </SelectItem>
-                            <SelectItem
-                              value="COPY_CODE"
-                              className="text-popover-foreground focus:bg-muted focus:text-popover-foreground"
-                            >
-                              {t('btnCopyCode')}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
+                {bodyVarCount > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    <Label className="text-muted-foreground text-[11px]">
+                      {t('sampleValues')}
+                    </Label>
+                    {form.body_samples.map((val, i) => {
+                      const inputId = `template-body-sample-${i}`;
+                      return (
                         <Input
-                          placeholder={t('btnLabelPlaceholder')}
-                          value={btn.text}
-                          maxLength={TEMPLATE_LIMITS.buttonTextMaxLength}
-                          onChange={(e) =>
-                            updateButton(i, { text: e.target.value })
-                          }
-                          className="flex-1 bg-muted border-border text-foreground placeholder:text-muted-foreground h-8 text-xs"
+                          key={i}
+                          id={inputId}
+                          aria-label={t('sampleAria', { var: `{{${i + 1}}}` })}
+                          placeholder={t('samplePlaceholder', {
+                            var: `{{${i + 1}}}`,
+                          })}
+                          value={val}
+                          onChange={(e) => {
+                            const next = [...form.body_samples];
+                            next[i] = e.target.value;
+                            setForm({ ...form, body_samples: next });
+                          }}
+                          className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
                         />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeButton(i)}
-                          className="text-muted-foreground hover:text-red-400 hover:bg-red-950/30 size-7"
-                        >
-                          <X className="size-3.5" />
-                        </Button>
-                      </div>
-                      {btn.type === 'URL' && (
-                        <div className="space-y-1 pl-1">
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">{t('footer')}</Label>
+                <Input
+                  placeholder={t('footerPlaceholder')}
+                  value={form.footer_text}
+                  onChange={(e) =>
+                    setForm({ ...form, footer_text: e.target.value })
+                  }
+                  maxLength={TEMPLATE_LIMITS.footerMaxLength}
+                  className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
+                />
+              </div>
+
+              <div className="border-border space-y-2 border-t pt-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-muted-foreground">
+                    {t('sectionButtons')}
+                  </Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addButton}
+                    disabled={
+                      form.buttons.length >= TEMPLATE_LIMITS.maxButtonsTotal
+                    }
+                    className="border-border text-muted-foreground hover:bg-muted h-7 bg-transparent text-xs"
+                  >
+                    <Plus className="size-3" />
+                    {t('addButton')}
+                  </Button>
+                </div>
+                {form.buttons.length === 0 ? (
+                  <p className="text-muted-foreground text-[11px]">
+                    {t('buttonsLimit', {
+                      max: TEMPLATE_LIMITS.maxButtonsTotal,
+                    })}
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {form.buttons.map((btn, i) => (
+                      <div
+                        key={i}
+                        className="border-border bg-muted/50 space-y-2 rounded border p-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Select
+                            value={btn.type}
+                            onValueChange={(val) => {
+                              // Same null guard as the Header Select
+                              // (per PR 148): @base-ui Select fires
+                              // onValueChange(null) on deselect.
+                              if (!val) return;
+                              changeButtonType(
+                                i,
+                                val as TemplateButton['type']
+                              );
+                            }}
+                          >
+                            <SelectTrigger className="bg-muted border-border text-foreground h-8 w-40 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-popover border-border">
+                              <SelectItem
+                                value="QUICK_REPLY"
+                                className="text-popover-foreground focus:bg-muted focus:text-popover-foreground"
+                              >
+                                {t('btnQuickReply')}
+                              </SelectItem>
+                              <SelectItem
+                                value="URL"
+                                className="text-popover-foreground focus:bg-muted focus:text-popover-foreground"
+                              >
+                                {t('btnUrl')}
+                              </SelectItem>
+                              <SelectItem
+                                value="PHONE_NUMBER"
+                                className="text-popover-foreground focus:bg-muted focus:text-popover-foreground"
+                              >
+                                {t('btnPhone')}
+                              </SelectItem>
+                              <SelectItem
+                                value="COPY_CODE"
+                                className="text-popover-foreground focus:bg-muted focus:text-popover-foreground"
+                              >
+                                {t('btnCopyCode')}
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
                           <Input
-                            placeholder={t.raw('urlPlaceholder')}
-                            value={btn.url}
+                            placeholder={t('btnLabelPlaceholder')}
+                            value={btn.text}
+                            maxLength={TEMPLATE_LIMITS.buttonTextMaxLength}
                             onChange={(e) =>
-                              updateButton(i, { url: e.target.value })
+                              updateButton(i, { text: e.target.value })
                             }
-                            className="bg-muted border-border text-foreground placeholder:text-muted-foreground h-8 text-xs"
+                            className="bg-muted border-border text-foreground placeholder:text-muted-foreground h-8 flex-1 text-xs"
                           />
-                          {extractVariableIndices(btn.url).length > 0 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeButton(i)}
+                            className="text-muted-foreground size-7 hover:bg-red-950/30 hover:text-red-400"
+                          >
+                            <X className="size-3.5" />
+                          </Button>
+                        </div>
+                        {btn.type === 'URL' && (
+                          <div className="space-y-1 pl-1">
                             <Input
-                              placeholder={t.raw('urlSamplePlaceholder')}
-                              value={btn.example ?? ''}
+                              placeholder={t.raw('urlPlaceholder')}
+                              value={btn.url}
                               onChange={(e) =>
-                                updateButton(i, { example: e.target.value })
+                                updateButton(i, { url: e.target.value })
                               }
                               className="bg-muted border-border text-foreground placeholder:text-muted-foreground h-8 text-xs"
                             />
-                          )}
-                        </div>
-                      )}
-                      {btn.type === 'PHONE_NUMBER' && (
-                        <Input
-                          placeholder={t('phonePlaceholder')}
-                          value={btn.phone_number}
-                          onChange={(e) =>
-                            updateButton(i, { phone_number: e.target.value })
-                          }
-                          className="bg-muted border-border text-foreground placeholder:text-muted-foreground h-8 text-xs"
-                        />
-                      )}
-                      {btn.type === 'COPY_CODE' && (
-                        <Input
-                          placeholder={t('codePlaceholder')}
-                          value={btn.example}
-                          onChange={(e) =>
-                            updateButton(i, { example: e.target.value })
-                          }
-                          className="bg-muted border-border text-foreground placeholder:text-muted-foreground h-8 text-xs"
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+                            {extractVariableIndices(btn.url).length > 0 && (
+                              <Input
+                                placeholder={t.raw('urlSamplePlaceholder')}
+                                value={btn.example ?? ''}
+                                onChange={(e) =>
+                                  updateButton(i, { example: e.target.value })
+                                }
+                                className="bg-muted border-border text-foreground placeholder:text-muted-foreground h-8 text-xs"
+                              />
+                            )}
+                          </div>
+                        )}
+                        {btn.type === 'PHONE_NUMBER' && (
+                          <Input
+                            placeholder={t('phonePlaceholder')}
+                            value={btn.phone_number}
+                            onChange={(e) =>
+                              updateButton(i, { phone_number: e.target.value })
+                            }
+                            className="bg-muted border-border text-foreground placeholder:text-muted-foreground h-8 text-xs"
+                          />
+                        )}
+                        {btn.type === 'COPY_CODE' && (
+                          <Input
+                            placeholder={t('codePlaceholder')}
+                            value={btn.example}
+                            onChange={(e) =>
+                              updateButton(i, { example: e.target.value })
+                            }
+                            className="bg-muted border-border text-foreground placeholder:text-muted-foreground h-8 text-xs"
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          <DialogFooter className="bg-popover border-border">
+          <DialogFooter className="bg-muted/30 border-border mx-0 mb-0 border-t px-5 py-4">
             <Button
               variant="outline"
               onClick={() => setDialogOpen(false)}
@@ -1212,7 +1588,9 @@ export function TemplateManager() {
       >
         <DialogContent className="bg-popover border-border sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-popover-foreground">{t('deleteDialogTitle')}</DialogTitle>
+            <DialogTitle className="text-popover-foreground">
+              {t('deleteDialogTitle')}
+            </DialogTitle>
             <DialogDescription className="text-muted-foreground">
               {templateToDelete?.meta_template_id
                 ? t('deleteMetaDesc', { name: templateToDelete.name })
@@ -1231,7 +1609,7 @@ export function TemplateManager() {
             <Button
               onClick={confirmDelete}
               disabled={deletingId !== null}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-red-600 text-white hover:bg-red-700"
             >
               {deletingId !== null ? (
                 <>

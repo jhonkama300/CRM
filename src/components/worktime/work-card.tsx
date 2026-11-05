@@ -26,19 +26,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-function shortTime(value: string | null): string | null {
-  if (!value) return null;
-  return value.slice(0, 5);
-}
-
-/** Reusable shift card (status, timer, break, pause/finish, schedule). */
+/** Reusable shift card (status, timer, break, pause/finish). */
 export function WorkCard() {
   const t = useTranslations('WorkTime');
   const [reason, setReason] = useState('');
   const {
     active,
-    pulse,
-    schedule,
     workedToday,
     busy,
     onBreak,
@@ -67,7 +60,7 @@ export function WorkCard() {
       } else if (action === 'out') {
         await checkOut(
           stale ? reason.trim() : undefined,
-          stale ? (staleEnd ?? undefined) : undefined,
+          stale ? (staleEnd ?? undefined) : undefined
         );
         toast.success(t('checkOutSuccess'));
       } else if (action === 'pause') {
@@ -84,7 +77,7 @@ export function WorkCard() {
     <div className="p-4">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="flex flex-wrap items-baseline gap-1.5 text-sm font-medium text-foreground">
+          <p className="text-foreground flex flex-wrap items-baseline gap-1.5 text-sm font-medium">
             <span>
               {active
                 ? stale
@@ -99,17 +92,19 @@ export function WorkCard() {
             {active && (
               <>
                 <span className="text-muted-foreground">|</span>
-                <span className="tabular-nums">{formatClock(elapsedSeconds)}</span>
+                <span className="tabular-nums">
+                  {formatClock(elapsedSeconds)}
+                </span>
               </>
             )}
           </p>
           {active && startedAt && (
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
+            <p className="text-muted-foreground mt-0.5 text-[11px]">
               {t('onShiftSince', { time: startedAt })}
             </p>
           )}
           {!active && workedToday && (
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
+            <p className="text-muted-foreground mt-0.5 text-[11px]">
               {t('today')}: {formatClock(elapsedSeconds)}
             </p>
           )}
@@ -119,17 +114,17 @@ export function WorkCard() {
             href="/settings?tab=worktime"
             aria-label={t('history')}
             title={t('history')}
-            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-6 items-center justify-center rounded"
           >
             <Pencil className="h-3.5 w-3.5" />
           </Link>
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <ChevronRight className="text-muted-foreground h-4 w-4" />
         </div>
       </div>
 
       {active ? (
         <>
-          <div className="mt-3 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+          <div className="bg-muted text-muted-foreground mt-3 rounded-lg px-3 py-2 text-xs">
             {t('breakDuration', { duration: formatClock(breakSeconds) })}
           </div>
 
@@ -144,7 +139,7 @@ export function WorkCard() {
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 placeholder={t('staleReasonPlaceholder')}
-                className="mt-2 min-h-20 border-red-500/30 bg-muted text-foreground"
+                className="bg-muted text-foreground mt-2 min-h-20 border-red-500/30"
               />
             </div>
           )}
@@ -172,7 +167,7 @@ export function WorkCard() {
               className={
                 stale
                   ? 'flex flex-1 overflow-hidden rounded-lg bg-red-600 text-white'
-                  : 'flex flex-1 overflow-hidden rounded-lg bg-primary text-primary-foreground'
+                  : 'bg-primary text-primary-foreground flex flex-1 overflow-hidden rounded-lg'
               }
             >
               <button
@@ -206,7 +201,7 @@ export function WorkCard() {
         <Button
           onClick={() => void run('in')}
           disabled={busy}
-          className="mt-3 w-full bg-primary text-primary-foreground hover:bg-primary/90"
+          className="bg-primary text-primary-foreground hover:bg-primary/90 mt-3 w-full"
         >
           {busy ? (
             <Loader2 className="mr-1 h-4 w-4 animate-spin" />
@@ -216,32 +211,6 @@ export function WorkCard() {
           {workedToday ? t('resumeShift') : t('startShift')}
         </Button>
       )}
-
-      {schedule &&
-        (schedule.workday_start || schedule.workday_end || schedule.break_start) && (
-          <div className="mt-3 space-y-0.5 border-t border-border pt-3 text-[11px] text-muted-foreground">
-            {schedule.workday_start && schedule.workday_end && (
-              <p>
-                {t('scheduleLine', {
-                  start: shortTime(schedule.workday_start) ?? '',
-                  end: shortTime(schedule.workday_end) ?? '',
-                })}
-              </p>
-            )}
-            {schedule.break_start && schedule.break_end && (
-              <p>
-                {t('breakLine', {
-                  start: shortTime(schedule.break_start) ?? '',
-                  end: shortTime(schedule.break_end) ?? '',
-                })}
-              </p>
-            )}
-          </div>
-        )}
-
-      <p className="mt-2 text-[11px] text-muted-foreground">
-        {t('workingNow', { count: pulse })}
-      </p>
     </div>
   );
 }

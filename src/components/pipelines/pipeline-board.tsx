@@ -17,7 +17,7 @@ import {
 import type { Deal, PipelineStage } from "@/types";
 import { DealCard } from "./deal-card";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { CircleDashed, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 interface PipelineBoardProps {
@@ -197,37 +197,34 @@ function StageColumn({
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
 
   return (
-    // On mobile each column is `w-[85vw]` (with a reasonable min/max)
-    // so the next column's edge peeks in — a "there's more here" hint.
-    // snap-start lands each column cleanly when swiping. On lg+ we
-    // restore the flex-1 share-the-row behavior. The droppable ref is
-    // on the inner messages region below — intentionally NOT here, so
-    // a drag over the column header doesn't highlight the whole column.
-    <div className="flex w-[85vw] min-w-[260px] max-w-[320px] shrink-0 snap-start flex-col rounded-2xl border border-border bg-card p-3.5 shadow-sm lg:w-auto lg:max-w-none lg:flex-1 lg:basis-[260px] lg:shrink lg:snap-none">
-      <div className="flex items-center gap-2">
+    <div className="flex w-[85vw] min-w-[268px] max-w-[320px] shrink-0 snap-start flex-col rounded-xl border border-border bg-card/70 p-3 shadow-sm lg:w-auto lg:max-w-none lg:flex-1 lg:basis-[272px] lg:shrink lg:snap-none">
+      <div className="flex items-center gap-2 px-0.5">
         <span
-          className="h-2.5 w-2.5 shrink-0 rounded-full"
+          className="h-2.5 w-2.5 shrink-0 rounded-full ring-4 ring-background/40"
           style={{ backgroundColor: stage.color }}
         />
-        <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
+        <h3 className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">
           {stage.name}
         </h3>
-        <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+        <span className="shrink-0 rounded-md border border-border bg-muted/70 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
           {deals.length}
         </span>
       </div>
 
       <div
         ref={setNodeRef}
-        className={`mt-3 flex flex-1 flex-col gap-2 rounded-xl transition-all ${
+        className={`mt-3 flex flex-1 flex-col gap-2 rounded-lg transition-all ${
           isOver
-            ? "bg-primary/5 outline outline-2 outline-dashed outline-primary outline-offset-2"
+            ? "bg-primary/5 p-1.5 outline outline-2 outline-dashed outline-primary/70"
             : ""
         }`}
       >
         {deals.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center rounded-lg border-2 border-dashed border-border py-10 text-xs text-muted-foreground">
-            {t("dropDealHere")}
+          <div className="flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-border/80 px-3 py-10 text-center">
+            <CircleDashed className="h-4 w-4 text-muted-foreground/50" />
+            <p className="mt-2 text-[10.5px] text-muted-foreground">
+              {t("dropDealHere")}
+            </p>
           </div>
         ) : (
           deals.map((deal) => (
@@ -246,7 +243,7 @@ function StageColumn({
         variant="ghost"
         size="sm"
         onClick={() => onAddDeal(stage.id)}
-        className="mt-3 w-full justify-start rounded-lg border border-dashed border-border bg-transparent text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
+        className="mt-3 w-full justify-start rounded-md border border-dashed border-border bg-transparent text-[11px] text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
       >
         <Plus className="mr-1 h-3 w-3" />
         {t("addDeal")}

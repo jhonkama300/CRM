@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { ChevronRight, Loader2 } from 'lucide-react';
+import { Building2, ChevronRight, LayoutGrid, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { createClient } from '@/lib/supabase/client';
@@ -11,7 +11,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-import { SECTION_META, type SettingsSection } from './settings-sections';
+import {
+  SECTION_META,
+  SETTINGS_SECTIONS,
+  type SettingsSection,
+} from './settings-sections';
 import { SettingsChip, StatusDot } from './settings-chip';
 import { ROLE_META } from './role-meta';
 
@@ -34,8 +38,15 @@ export function SettingsOverview({
 }: {
   onSelect: (section: SettingsSection) => void;
 }) {
-  const { user, profile, accountId, accountRole, defaultCurrency, canManageMembers } =
-    useAuth();
+  const {
+    user,
+    profile,
+    account,
+    accountId,
+    accountRole,
+    defaultCurrency,
+    canManageMembers,
+  } = useAuth();
   const t = useTranslations('Settings.overview');
   const tRoles = useTranslations('Settings.roles');
   const tSections = useTranslations('Settings.sections');
@@ -58,34 +69,45 @@ export function SettingsOverview({
     // Cheap counts — resolve fast, render immediately.
     (async () => {
       setCountsLoading(true);
-      const [membersRes, invitesRes, templatesTotal, templatesPending, tagsRes, fieldsRes] =
-        await Promise.allSettled([
-          fetch('/api/account/members', { cache: 'no-store' }).then((r) => r.json()),
-          canManageMembers
-            ? fetch('/api/account/invitations', { cache: 'no-store' }).then((r) =>
-                r.json(),
-              )
-            : Promise.resolve(null),
-          supabase
-            .from('message_templates')
-            .select('id', { count: 'exact', head: true })
-            .eq('account_id', acctId),
-          supabase
-            .from('message_templates')
-            .select('id', { count: 'exact', head: true })
-            .eq('account_id', acctId)
-            .eq('status', 'PENDING'),
-          supabase
-            .from('tags')
-            .select('id', { count: 'exact', head: true })
-            .eq('account_id', acctId),
-          supabase.from('custom_fields').select('id', { count: 'exact', head: true }),
-        ]);
+      const [
+        membersRes,
+        invitesRes,
+        templatesTotal,
+        templatesPending,
+        tagsRes,
+        fieldsRes,
+      ] = await Promise.allSettled([
+        fetch('/api/account/members', { cache: 'no-store' }).then((r) =>
+          r.json()
+        ),
+        canManageMembers
+          ? fetch('/api/account/invitations', { cache: 'no-store' }).then((r) =>
+              r.json()
+            )
+          : Promise.resolve(null),
+        supabase
+          .from('message_templates')
+          .select('id', { count: 'exact', head: true })
+          .eq('account_id', acctId),
+        supabase
+          .from('message_templates')
+          .select('id', { count: 'exact', head: true })
+          .eq('account_id', acctId)
+          .eq('status', 'PENDING'),
+        supabase
+          .from('tags')
+          .select('id', { count: 'exact', head: true })
+          .eq('account_id', acctId),
+        supabase
+          .from('custom_fields')
+          .select('id', { count: 'exact', head: true }),
+      ]);
 
       if (cancelled) return;
 
       const members =
-        membersRes.status === 'fulfilled' && Array.isArray(membersRes.value?.members)
+        membersRes.status === 'fulfilled' &&
+        Array.isArray(membersRes.value?.members)
           ? membersRes.value.members.length
           : null;
       const pendingInvites =
@@ -100,15 +122,18 @@ export function SettingsOverview({
         pendingInvites,
         templates:
           templatesTotal.status === 'fulfilled'
-            ? templatesTotal.value.count ?? null
+            ? (templatesTotal.value.count ?? null)
             : null,
         templatesPending:
           templatesPending.status === 'fulfilled'
-            ? templatesPending.value.count ?? null
+            ? (templatesPending.value.count ?? null)
             : null,
-        tags: tagsRes.status === 'fulfilled' ? tagsRes.value.count ?? null : null,
+        tags:
+          tagsRes.status === 'fulfilled' ? (tagsRes.value.count ?? null) : null,
         customFields:
-          fieldsRes.status === 'fulfilled' ? fieldsRes.value.count ?? null : null,
+          fieldsRes.status === 'fulfilled'
+            ? (fieldsRes.value.count ?? null)
+            : null,
       });
       setCountsLoading(false);
     })();
@@ -122,11 +147,14 @@ export function SettingsOverview({
           .select('phone_number_id')
           .eq('account_id', acctId)
           .maybeSingle(),
-        fetch('/api/whatsapp/config', { cache: 'no-store' }).then((r) => r.json()),
+        fetch('/api/whatsapp/config', { cache: 'no-store' }).then((r) =>
+          r.json()
+        ),
       ]);
       if (cancelled) return;
       setWhatsapp({
-        configured: row.status === 'fulfilled' && !!row.value.data?.phone_number_id,
+        configured:
+          row.status === 'fulfilled' && !!row.value.data?.phone_number_id,
         connected: health.status === 'fulfilled' && !!health.value?.connected,
       });
       setWhatsappLoading(false);
@@ -135,15 +163,18 @@ export function SettingsOverview({
     return () => {
       cancelled = true;
     };
-  }, [user?.id, accountId, canManageMembers]);
+  }, [user, accountId, canManageMembers]);
 
   const displayName = profile?.full_name || profile?.email || t('yourAccount');
-  const initial = (profile?.full_name || profile?.email || 'U').charAt(0).toUpperCase();
+  const initial = (profile?.full_name || profile?.email || 'U')
+    .charAt(0)
+    .toUpperCase();
   const roleMeta = accountRole ? ROLE_META[accountRole] : null;
   const RoleIcon = roleMeta?.icon;
 
   const currencyLabel =
-    CURRENCIES.find((c) => c.code === defaultCurrency)?.label ?? defaultCurrency;
+    CURRENCIES.find((c) => c.code === defaultCurrency)?.label ??
+    defaultCurrency;
 
   // Per-tile loading + subtitle. `null` counts render as a graceful
   // fallback so a single failed query never blanks a tile.
@@ -202,36 +233,49 @@ export function SettingsOverview({
       subtitle:
         counts?.tags == null && counts?.customFields == null
           ? t('tagsAndFields')
-          : `${t('tagsCount', { count: counts?.tags ?? 0 })} · ${t('fieldsCount', {
-              count: counts?.customFields ?? 0,
-            })}`,
+          : `${t('tagsCount', { count: counts?.tags ?? 0 })} · ${t(
+              'fieldsCount',
+              {
+                count: counts?.customFields ?? 0,
+              }
+            )}`,
     },
   ];
 
   return (
     <section className="animate-in fade-in-50 duration-200">
       {/* Identity */}
-      <Card className="flex-row items-center gap-4 px-5 py-5">
-        <Avatar size="lg" className="size-14">
+      <Card className="relative flex-row items-center gap-4 overflow-hidden px-5 py-5">
+        <div
+          aria-hidden
+          className="from-primary/10 pointer-events-none absolute inset-0 bg-gradient-to-br via-transparent to-transparent"
+        />
+        <Avatar size="lg" className="relative size-14">
           {profile?.avatar_url ? (
             <AvatarImage src={profile.avatar_url} alt={displayName} />
           ) : null}
-          <AvatarFallback className="bg-primary/10 text-xl text-primary">
+          <AvatarFallback className="bg-primary/10 text-primary text-xl">
             {initial}
           </AvatarFallback>
         </Avatar>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-base font-semibold text-foreground">
+        <div className="relative min-w-0 flex-1">
+          <div className="text-foreground truncate text-base font-semibold">
             {displayName}
           </div>
           {profile?.email ? (
-            <div className="truncate text-sm text-muted-foreground">
+            <div className="text-muted-foreground truncate text-sm">
               {profile.email}
+            </div>
+          ) : null}
+          {account?.name ? (
+            <div className="text-muted-foreground mt-1.5 flex items-center gap-1.5 text-xs">
+              <Building2 className="text-primary size-3.5 shrink-0" />
+              <span className="truncate">{account.name}</span>
             </div>
           ) : null}
         </div>
         {roleMeta && RoleIcon ? (
-          <SettingsChip variant={roleMeta.variant}>
+          <SettingsChip variant={roleMeta.variant} className="relative">
             <RoleIcon />
             {tRoles(accountRole!)}
           </SettingsChip>
@@ -249,18 +293,18 @@ export function SettingsOverview({
               type="button"
               onClick={() => onSelect(section)}
               className={cn(
-                'group flex items-start gap-3.5 rounded-xl border border-border bg-card p-4 text-left transition-colors',
-                'hover:border-primary-soft-2 hover:bg-card-2',
+                'group border-border bg-card flex items-start gap-3.5 rounded-xl border p-4 text-left transition-colors',
+                'hover:border-primary-soft-2 hover:bg-card-2'
               )}
             >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+              <span className="bg-primary-soft text-primary flex size-9 shrink-0 items-center justify-center rounded-lg">
                 <Icon className="size-4" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold text-foreground">
+                <span className="text-foreground block text-sm font-semibold">
                   {tSections(section)}
                 </span>
-                <span className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-xs">
                   {loading ? (
                     <>
                       <Loader2 className="size-3 animate-spin" /> {t('loading')}
@@ -270,10 +314,41 @@ export function SettingsOverview({
                   )}
                 </span>
               </span>
-              <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+              <ChevronRight className="text-muted-foreground size-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
             </button>
           );
         })}
+      </div>
+
+      <div className="mt-6">
+        <div className="mb-3 flex items-center gap-2">
+          <LayoutGrid className="text-primary size-4" />
+          <h2 className="text-foreground text-sm font-semibold">
+            {t('allSections')}
+          </h2>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {SETTINGS_SECTIONS.filter((s) => s !== 'overview').map((section) => {
+            const meta = SECTION_META[section];
+            const Icon = meta.icon;
+            return (
+              <button
+                key={section}
+                type="button"
+                onClick={() => onSelect(section)}
+                className="group border-border bg-card hover:bg-muted/40 flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors"
+              >
+                <span className="bg-muted/70 text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary flex size-7 shrink-0 items-center justify-center rounded-lg transition-colors">
+                  <Icon className="size-3.5" />
+                </span>
+                <span className="text-foreground flex-1 text-sm font-medium">
+                  {tSections(section)}
+                </span>
+                <ChevronRight className="text-muted-foreground group-hover:text-foreground size-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
+              </button>
+            );
+          })}
+        </div>
       </div>
     </section>
   );

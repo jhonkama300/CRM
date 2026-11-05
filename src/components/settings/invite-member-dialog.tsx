@@ -28,6 +28,7 @@ import {
   Plus,
   Sparkles,
   UserPlus,
+  UsersRound,
   X,
 } from 'lucide-react';
 
@@ -52,6 +53,7 @@ import {
 import { useTranslations } from 'next-intl';
 import { useAuth } from '@/hooks/use-auth';
 import { createClient } from '@/lib/supabase/client';
+import { cn } from '@/lib/utils';
 
 type InviteRole = 'admin' | 'agent' | 'viewer';
 type DepartmentRole = 'manager' | 'supervisor' | 'agent' | 'viewer';
@@ -91,6 +93,12 @@ const TAB_LABEL_KEYS: Record<TabId, string> = {
   link: 'tabLink',
   email: 'tabEmail',
   create: 'tabCreate',
+};
+
+const TAB_DESC_KEYS: Record<TabId, string> = {
+  link: 'dialogDesc',
+  email: 'emailTabDesc',
+  create: 'createTabDesc',
 };
 
 type CreatedResult =
@@ -384,11 +392,18 @@ export function InviteMemberDialog({
     onOpenChange(next);
   };
 
+  const ActiveTabIcon = TAB_ICONS[tab];
+
   return (
     <Dialog open={open} onOpenChange={closeAndReset}>
-      <DialogContent className="border-border bg-popover gap-0 overflow-hidden p-0 sm:max-w-3xl">
+      <DialogContent
+        className={cn(
+          'border-border bg-popover gap-0 overflow-hidden p-0',
+          result ? 'sm:max-w-2xl' : 'sm:max-w-4xl'
+        )}
+      >
         {result ? (
-          <div className="max-h-[85vh] overflow-y-auto p-5 pr-10 sm:p-6 sm:pr-12">
+          <div className="mx-auto max-h-[85vh] w-full max-w-2xl overflow-y-auto p-5 pr-10 sm:p-8 sm:pr-12">
             {result.kind === 'link' ? (
               <>
                 <DialogHeader>
@@ -523,12 +538,22 @@ export function InviteMemberDialog({
           </div>
         ) : (
           <div className="flex max-h-[85vh] flex-col sm:max-h-[640px] sm:flex-row">
-            <aside className="border-border/70 bg-muted/20 shrink-0 border-b p-4 sm:w-60 sm:border-r sm:border-b-0">
+            <aside className="border-border/70 bg-muted/20 shrink-0 border-b p-4 sm:w-64 sm:border-r sm:border-b-0 sm:p-5">
               <DialogHeader className="pr-8 sm:pr-0">
-                <DialogTitle className="text-popover-foreground text-base">
-                  {t('dialogTitle')}
-                </DialogTitle>
-                <DialogDescription className="text-muted-foreground text-xs">
+                <div className="flex items-center gap-2.5">
+                  <span className="bg-primary text-primary-foreground flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-sm">
+                    <UsersRound className="h-4.5 w-4.5" />
+                  </span>
+                  <div className="min-w-0">
+                    <DialogTitle className="text-popover-foreground truncate text-base">
+                      {t('dialogTitle')}
+                    </DialogTitle>
+                    <p className="text-muted-foreground text-[10px] font-semibold tracking-[0.12em] uppercase">
+                      {t('membersTotalUnknown')}
+                    </p>
+                  </div>
+                </div>
+                <DialogDescription className="text-muted-foreground mt-3 text-xs leading-relaxed">
                   {departmentName
                     ? t('departmentDialogDesc', { department: departmentName })
                     : t('dialogSubtitle')}
@@ -537,7 +562,7 @@ export function InviteMemberDialog({
 
               <nav
                 aria-label={t('dialogTitle')}
-                className="mt-4 grid grid-cols-3 gap-1 sm:flex sm:flex-col"
+                className="mt-5 grid grid-cols-3 gap-1 sm:flex sm:flex-col sm:gap-1.5"
               >
                 {(Object.keys(TAB_ICONS) as TabId[]).map((tabId) => {
                   const Icon = TAB_ICONS[tabId];
@@ -553,35 +578,69 @@ export function InviteMemberDialog({
                       aria-current={active ? 'page' : undefined}
                       className={
                         active
-                          ? 'bg-background text-foreground ring-border flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium shadow-sm ring-1'
-                          : 'text-muted-foreground hover:bg-background/70 hover:text-foreground flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium transition-colors'
+                          ? 'border-border bg-background text-foreground ring-border flex items-center gap-2.5 rounded-xl border px-2.5 py-2.5 text-left shadow-sm ring-1'
+                          : 'text-muted-foreground hover:bg-background/70 hover:text-foreground flex items-center gap-2.5 rounded-xl border border-transparent px-2.5 py-2.5 text-left transition-colors'
                       }
                     >
-                      <Icon className="size-4 shrink-0" />
-                      <span className="truncate">
-                        {t(TAB_LABEL_KEYS[tabId])}
+                      <span
+                        className={
+                          active
+                            ? 'bg-primary/10 text-primary flex h-7 w-7 shrink-0 items-center justify-center rounded-lg'
+                            : 'bg-muted text-muted-foreground flex h-7 w-7 shrink-0 items-center justify-center rounded-lg'
+                        }
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-medium">
+                          {t(TAB_LABEL_KEYS[tabId])}
+                        </span>
+                        <span className="text-muted-foreground mt-0.5 hidden truncate text-[10px] sm:block">
+                          {t(TAB_DESC_KEYS[tabId])}
+                        </span>
                       </span>
                     </button>
                   );
                 })}
               </nav>
 
-              <div className="border-border/70 bg-background/60 mt-4 hidden rounded-xl border p-3 sm:block">
-                <p className="text-muted-foreground text-[11px] font-medium">
-                  {t('pendingInvitesShort')}
-                </p>
-                <p className="text-foreground mt-1 text-2xl font-semibold">
-                  {pendingCount ?? '—'}
-                </p>
-                <p className="text-muted-foreground mt-1 text-[11px]">
-                  {memberCount === null
-                    ? t('membersTotalUnknown')
-                    : t('membersTotal', { count: memberCount })}
-                </p>
+              <div className="border-border/70 bg-background/70 mt-5 rounded-xl border p-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="border-border bg-card rounded-lg border px-2.5 py-2">
+                    <p className="text-muted-foreground text-[9px] font-semibold tracking-wide uppercase">
+                      {t('pendingInvitesShort')}
+                    </p>
+                    <p className="text-foreground mt-1 text-xl font-semibold tabular-nums">
+                      {pendingCount ?? '—'}
+                    </p>
+                  </div>
+                  <div className="border-border bg-card rounded-lg border px-2.5 py-2">
+                    <p className="text-muted-foreground text-[9px] font-semibold tracking-wide uppercase">
+                      {t('membersTotalUnknown')}
+                    </p>
+                    <p className="text-foreground mt-1 text-xl font-semibold tabular-nums">
+                      {memberCount ?? '—'}
+                    </p>
+                  </div>
+                </div>
               </div>
             </aside>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-4 pr-10 sm:p-6 sm:pr-12">
+              <div className="border-border mb-5 flex items-start gap-3 border-b pb-4">
+                <span className="bg-primary/10 text-primary flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">
+                  <ActiveTabIcon className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="text-foreground text-sm font-semibold">
+                    {t(TAB_LABEL_KEYS[tab])}
+                  </h3>
+                  <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">
+                    {t(TAB_DESC_KEYS[tab])}
+                  </p>
+                </div>
+              </div>
+
               <div className="mb-5 space-y-2">
                 <Label className="text-muted-foreground text-xs">
                   {t('departmentLabel')}
@@ -665,10 +724,6 @@ export function InviteMemberDialog({
 
               {tab === 'link' ? (
                 <div className="space-y-4">
-                  <p className="text-muted-foreground text-xs">
-                    {t('dialogDesc')}
-                  </p>
-
                   <div className="space-y-2">
                     <Label className="text-muted-foreground">
                       {t('roleLabel')}
@@ -798,10 +853,6 @@ export function InviteMemberDialog({
 
               {tab === 'email' ? (
                 <div className="space-y-4">
-                  <p className="text-muted-foreground text-xs">
-                    {t('emailTabDesc')}
-                  </p>
-
                   <div className="space-y-2">
                     <Label className="text-muted-foreground">
                       {t('emailLabel')}
@@ -876,9 +927,6 @@ export function InviteMemberDialog({
                       {t('userInfo')}
                     </p>
                   </div>
-                  <p className="text-muted-foreground text-xs">
-                    {t('createTabDesc')}
-                  </p>
 
                   <div className="space-y-2">
                     <Label className="text-muted-foreground">
@@ -939,12 +987,20 @@ export function InviteMemberDialog({
                     </Select>
                   </div>
 
-                  <label className="text-muted-foreground flex cursor-pointer items-center gap-2 text-xs">
+                  <label className="border-border bg-muted/30 hover:bg-muted/50 flex cursor-pointer items-start gap-2.5 rounded-lg border p-3 text-xs transition-colors">
                     <Checkbox
                       checked={noInvite}
                       onCheckedChange={(value) => setNoInvite(value === true)}
+                      className="mt-0.5"
                     />
-                    {t('noSendInvite')}
+                    <span>
+                      <span className="text-foreground block font-medium">
+                        {t('noSendInvite')}
+                      </span>
+                      <span className="text-muted-foreground mt-0.5 block leading-relaxed">
+                        {t('tempPasswordHint')}
+                      </span>
+                    </span>
                   </label>
 
                   <div className="flex justify-end gap-2 pt-1">

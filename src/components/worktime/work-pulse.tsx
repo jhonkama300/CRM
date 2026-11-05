@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, Clock } from 'lucide-react';
+import { AlertTriangle, Clock, Pause } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { useWorkSession } from '@/hooks/use-work-session';
@@ -13,8 +13,10 @@ import { cn } from '@/lib/utils';
  */
 export function WorkPulse() {
   const t = useTranslations('WorkTime');
-  const { active, loading, stale, elapsedSeconds, breakSeconds } =
+  const { active, loading, stale, workedToday, elapsedSeconds, breakSeconds } =
     useWorkSession();
+
+  const paused = !active && workedToday;
 
   if (loading) return null;
 
@@ -22,23 +24,33 @@ export function WorkPulse() {
     <div
       className={cn(
         'flex h-full flex-col justify-center px-2.5 text-xs leading-tight',
-        stale ? 'text-red-400' : 'text-muted-foreground',
+        stale ? 'text-red-400' : 'text-muted-foreground'
       )}
-      aria-label={stale ? t('staleTitle') : t('atWork')}
+      aria-label={
+        stale
+          ? t('staleTitle')
+          : active
+            ? t('atWork')
+            : paused
+              ? t('dayFinished')
+              : t('offShift')
+      }
     >
       <span className="flex items-center gap-1.5">
         {stale ? (
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+        ) : paused ? (
+          <Pause className="h-3.5 w-3.5 shrink-0" />
         ) : (
           <Clock className="h-3.5 w-3.5 shrink-0" />
         )}
         <span
           className={cn(
-            'tabular-nums text-sm font-semibold',
-            stale ? 'text-red-400' : 'text-foreground',
+            'text-sm font-semibold tabular-nums',
+            stale ? 'text-red-400' : 'text-foreground'
           )}
         >
-          {formatClock(active ? elapsedSeconds : 0)}
+          {formatClock(elapsedSeconds)}
         </span>
       </span>
       <span className="mt-0.5 text-[9px] whitespace-nowrap">

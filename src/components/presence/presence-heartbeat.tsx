@@ -1,10 +1,14 @@
-"use client";
+'use client';
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef } from 'react';
 
-import { createClient } from "@/lib/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
-import { HEARTBEAT_MS, IDLE_AFTER_MS, type StoredPresence } from "@/lib/presence";
+import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/hooks/use-auth';
+import {
+  HEARTBEAT_MS,
+  IDLE_AFTER_MS,
+  type StoredPresence,
+} from '@/lib/presence';
 
 /**
  * PresenceHeartbeat — headless. Mount ONCE per signed-in dashboard tab
@@ -36,6 +40,8 @@ export function PresenceHeartbeat() {
     const supabase = createClient();
     let cancelled = false;
     let lastBeatAt = 0;
+    let consecutiveFailures = 0;
+    let retryTimer: number | null = null;
     lastActivityRef.current = Date.now();
 
     const markActive = () => {
@@ -43,38 +49,62 @@ export function PresenceHeartbeat() {
     };
 
     const currentStatus = (): StoredPresence => {
-      if (typeof document !== "undefined" && document.hidden) return "away";
-      if (Date.now() - lastActivityRef.current > IDLE_AFTER_MS) return "away";
-      return "online";
+      if (typeof document !== 'undefined' && document.hidden) return 'away';
+      if (Date.now() - lastActivityRef.current > IDLE_AFTER_MS) return 'away';
+      return 'online';
     };
 
     const beat = async () => {
       if (cancelled) return;
+      // Skip while the browser knows it's offline - the fetch would fail
+      // every interval and pollute the console.
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
       // Coalesce bursts: a tab refocus fires visibilitychange AND focus
       // together, so skip a beat within 1s of the last to avoid two RPCs
       // in the same frame. The 30s interval is never affected.
       const t = Date.now();
       if (t - lastBeatAt < 1_000) return;
       lastBeatAt = t;
-      const { error } = await supabase.rpc("touch_presence", {
+      const { error } = await supabase.rpc('touch_presence', {
         p_status: currentStatus(),
       });
-      if (error && !cancelled) {
-        // Non-fatal: presence is best-effort. Log once per failure so a
-        // misconfigured RPC is visible without spamming.
-        console.error("[PresenceHeartbeat] touch_presence failed:", error.message);
+      if (!error) {
+        consecutiveFailures = 0;
+        return;
+      }
+      if (cancelled) return;
+
+      consecutiveFailures += 1;
+      const transient = /failed to fetch|networkerror|load failed|fetch/i.test(
+        error.message
+      );
+      // Presence is best-effort. A transient network failure is not an
+      // application error; warn once per streak (and every fifth retry)
+      // instead of spamming `console.error` every heartbeat.
+      if (consecutiveFailures === 1 || consecutiveFailures % 5 === 0) {
+        const log = transient ? console.warn : console.error;
+        log('[PresenceHeartbeat] touch_presence failed:', error.message, {
+          attempts: consecutiveFailures,
+        });
+      }
+      if (transient && consecutiveFailures < 4) {
+        if (retryTimer) window.clearTimeout(retryTimer);
+        retryTimer = window.setTimeout(
+          () => void beat(),
+          Math.min(8_000, 1_500 * consecutiveFailures)
+        );
       }
     };
 
     // Activity listeners. `passive` so we never block scroll/input.
     const activityEvents: (keyof DocumentEventMap)[] = [
-      "mousemove",
-      "keydown",
-      "pointerdown",
-      "scroll",
+      'mousemove',
+      'keydown',
+      'pointerdown',
+      'scroll',
     ];
     activityEvents.forEach((e) =>
-      document.addEventListener(e, markActive, { passive: true }),
+      document.addEventListener(e, markActive, { passive: true })
     );
 
     // Returning to the tab should beat immediately so a member flips
@@ -84,8 +114,13 @@ export function PresenceHeartbeat() {
       if (!document.hidden) markActive();
       void beat();
     };
-    document.addEventListener("visibilitychange", onReturn);
-    window.addEventListener("focus", onReturn);
+    document.addEventListener('visibilitychange', onReturn);
+    window.addEventListener('focus', onReturn);
+    const onOnline = () => {
+      consecutiveFailures = 0;
+      void beat();
+    };
+    window.addEventListener('online', onOnline);
 
     void beat();
     const interval = setInterval(() => void beat(), HEARTBEAT_MS);
@@ -93,11 +128,13 @@ export function PresenceHeartbeat() {
     return () => {
       cancelled = true;
       clearInterval(interval);
+      if (retryTimer) window.clearTimeout(retryTimer);
+      window.removeEventListener('online', onOnline);
       activityEvents.forEach((e) =>
-        document.removeEventListener(e, markActive),
+        document.removeEventListener(e, markActive)
       );
-      document.removeEventListener("visibilitychange", onReturn);
-      window.removeEventListener("focus", onReturn);
+      document.removeEventListener('visibilitychange', onReturn);
+      window.removeEventListener('focus', onReturn);
     };
   }, [accountId]);
 

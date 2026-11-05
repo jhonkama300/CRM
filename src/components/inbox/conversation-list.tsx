@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createClient } from '@/lib/supabase/client';
 import {
   CONVERSATION_SELECT,
   matchesContactFilters,
   normalizeConversations,
-} from "@/lib/inbox/conversations";
+} from '@/lib/inbox/conversations';
 import {
   applyInboxFilter,
   attentionLevel,
@@ -14,14 +14,15 @@ import {
   isSnoozed,
   minutesWaiting,
   type InboxFilter,
-} from "@/lib/inbox/inbox-filters";
-import { cn } from "@/lib/utils";
+} from '@/lib/inbox/inbox-filters';
+import { cn } from '@/lib/utils';
+import { contactHandle } from '@/lib/whatsapp/wa-identity';
 import type {
   AccountMember,
   Conversation,
   ConversationStatus,
   Tag,
-} from "@/types";
+} from '@/types';
 import {
   Search,
   X,
@@ -42,23 +43,23 @@ import {
   Users,
   Inbox as InboxIcon,
   Trash2,
-} from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import { useTranslations } from "next-intl";
-import { Input } from "@/components/ui/input";
+} from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { useTranslations } from 'next-intl';
+import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from '@/components/ui/dropdown-menu';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
+} from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
   DialogContent,
@@ -66,15 +67,12 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/use-auth";
-import { useCan } from "@/hooks/use-can";
-import {
-  fetchAccountMembers,
-  memberLabel,
-} from "@/lib/account/members";
-import { toast } from "sonner";
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/hooks/use-auth';
+import { useCan } from '@/hooks/use-can';
+import { fetchAccountMembers, memberLabel } from '@/lib/account/members';
+import { toast } from 'sonner';
 
 interface ConversationListProps {
   activeConversationId: string | null;
@@ -94,23 +92,23 @@ interface ConversationListProps {
 }
 
 const STATUS_COLORS: Record<ConversationStatus, string> = {
-  open: "bg-primary",
-  pending: "bg-amber-500",
-  closed: "bg-muted-foreground",
+  open: 'bg-primary',
+  pending: 'bg-amber-500',
+  closed: 'bg-muted-foreground',
 };
 
 const ATTENTION_DOT: Record<string, string> = {
-  ok: "bg-emerald-500",
-  warning: "bg-amber-500",
-  critical: "bg-red-500",
+  ok: 'bg-emerald-500',
+  warning: 'bg-amber-500',
+  critical: 'bg-red-500',
 };
 
 const TABS: { value: InboxFilter; key: string }[] = [
-  { value: "all", key: "filterAll" },
-  { value: "unread", key: "filterUnread" },
-  { value: "waiting", key: "filterWaiting" },
-  { value: "unassigned", key: "filterUnassigned" },
-  { value: "expiring", key: "filterExpiring" },
+  { value: 'all', key: 'filterAll' },
+  { value: 'unread', key: 'filterUnread' },
+  { value: 'waiting', key: 'filterWaiting' },
+  { value: 'unassigned', key: 'filterUnassigned' },
+  { value: 'expiring', key: 'filterExpiring' },
 ];
 
 function futureIso(hours: number): string {
@@ -130,17 +128,17 @@ export function ConversationList({
   conversations,
   onConversationsLoaded,
   resyncToken = 0,
-  initialFilter = "all",
+  initialFilter = 'all',
   onBulkUpdated,
   onConversationPatched,
   onRequestResync,
   onDeleted,
 }: ConversationListProps) {
-  const t = useTranslations("Inbox.conversationList");
+  const t = useTranslations('Inbox.conversationList');
   const { user } = useAuth();
-  const canDelete = useCan("edit-settings");
+  const canDelete = useCan('edit-settings');
 
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<InboxFilter>(initialFilter);
   const [now, setNow] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
@@ -148,8 +146,12 @@ export function ConversationList({
   const [members, setMembers] = useState<AccountMember[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
-  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | null>(null);
+  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(
+    null
+  );
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<
+    string | null
+  >(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -174,14 +176,14 @@ export function ConversationList({
 
     (async () => {
       const { data, error } = await supabase
-        .from("conversations")
+        .from('conversations')
         .select(CONVERSATION_SELECT)
-        .order("last_message_at", { ascending: false });
+        .order('last_message_at', { ascending: false });
 
       if (cancelled) return;
 
       if (error) {
-        console.error("Failed to fetch conversations:", {
+        console.error('Failed to fetch conversations:', {
           message: error.message,
           details: error.details,
           hint: error.hint,
@@ -204,7 +206,7 @@ export function ConversationList({
     const supabase = createClient();
     let cancelled = false;
     (async () => {
-      const { data } = await supabase.from("tags").select("*").order("name");
+      const { data } = await supabase.from('tags').select('*').order('name');
       if (!cancelled && data) setTags(data as Tag[]);
     })();
     void fetchAccountMembers().then((rows) => {
@@ -254,7 +256,7 @@ export function ConversationList({
         matchesContactFilters(c, {
           tagIds: selectedTagIds,
           company: selectedCompany,
-        }),
+        })
       );
     }
 
@@ -268,10 +270,10 @@ export function ConversationList({
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter((c) => {
-        const name = c.contact?.name?.toLowerCase() ?? "";
-        const phone = c.contact?.phone?.toLowerCase() ?? "";
-        const lastMsg = c.last_message_text?.toLowerCase() ?? "";
-        return name.includes(q) || phone.includes(q) || lastMsg.includes(q);
+        const name = c.contact?.name?.toLowerCase() ?? '';
+        const handle = contactHandle(c.contact ?? {}).toLowerCase();
+        const lastMsg = c.last_message_text?.toLowerCase() ?? '';
+        return name.includes(q) || handle.includes(q) || lastMsg.includes(q);
       });
     }
 
@@ -280,7 +282,16 @@ export function ConversationList({
       if (!!a.is_pinned !== !!b.is_pinned) return a.is_pinned ? -1 : 1;
       return 0;
     });
-  }, [conversations, filter, now, search, selectedTagIds, selectedCompany, selectedChannelId, selectedDepartmentId]);
+  }, [
+    conversations,
+    filter,
+    now,
+    search,
+    selectedTagIds,
+    selectedCompany,
+    selectedChannelId,
+    selectedDepartmentId,
+  ]);
 
   const counts = useMemo(() => {
     const out: Partial<Record<InboxFilter, number>> = {};
@@ -292,7 +303,7 @@ export function ConversationList({
 
   const toggleTag = useCallback((id: string) => {
     setSelectedTagIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
   }, []);
 
@@ -309,7 +320,7 @@ export function ConversationList({
     selectedChannelId !== null ||
     selectedDepartmentId !== null;
   const advancedActive =
-    hasContactFilters || ["open", "pending", "closed"].includes(filter);
+    hasContactFilters || ['open', 'pending', 'closed'].includes(filter);
 
   const toggleSelected = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -322,7 +333,10 @@ export function ConversationList({
 
   const toggleSelectAll = useCallback(() => {
     setSelectedIds((prev) => {
-      if (prev.size === filtered.length && filtered.every((c) => prev.has(c.id))) {
+      if (
+        prev.size === filtered.length &&
+        filtered.every((c) => prev.has(c.id))
+      ) {
         return new Set();
       }
       return new Set(filtered.map((c) => c.id));
@@ -333,63 +347,63 @@ export function ConversationList({
 
   const runBulk = useCallback(
     async (
-      action: "mark_read" | "close" | "assign" | "tag",
+      action: 'mark_read' | 'close' | 'assign' | 'tag',
       payload: Record<string, unknown> = {},
-      patch: Partial<Conversation> = {},
+      patch: Partial<Conversation> = {}
     ) => {
       if (selectedIds.size === 0) return;
       setBulkBusy(true);
       try {
         const ids = [...selectedIds];
-        const res = await fetch("/api/inbox/bulk", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const res = await fetch('/api/inbox/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ conversation_ids: ids, action, ...payload }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          toast.error(data?.error ?? t("bulkFailed"));
+          toast.error(data?.error ?? t('bulkFailed'));
           return;
         }
-        if (action === "tag") {
+        if (action === 'tag') {
           onRequestResync?.();
         } else {
           onBulkUpdated?.(ids, patch);
         }
         clearSelection();
-        toast.success(t("bulkDone"));
+        toast.success(t('bulkDone'));
       } catch {
-        toast.error(t("networkError"));
+        toast.error(t('networkError'));
       } finally {
         setBulkBusy(false);
       }
     },
-    [selectedIds, onBulkUpdated, onRequestResync, clearSelection, t],
+    [selectedIds, onBulkUpdated, onRequestResync, clearSelection, t]
   );
 
   const confirmDelete = useCallback(async () => {
     if (!deleteTarget || deleteTarget.ids.length === 0) return;
     setDeleting(true);
     try {
-      const res = await fetch("/api/inbox/bulk", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('/api/inbox/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           conversation_ids: deleteTarget.ids,
-          action: "delete",
+          action: 'delete',
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(data?.error ?? t("deleteFailed"));
+        toast.error(data?.error ?? t('deleteFailed'));
         return;
       }
       onDeleted?.(deleteTarget.ids);
       clearSelection();
       setDeleteTarget(null);
-      toast.success(t("deleted"));
+      toast.success(t('deleted'));
     } catch {
-      toast.error(t("networkError"));
+      toast.error(t('networkError'));
     } finally {
       setDeleting(false);
     }
@@ -399,39 +413,40 @@ export function ConversationList({
     async (id: string, patch: Partial<Conversation>) => {
       try {
         const res = await fetch(`/api/inbox/conversations/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(patch),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          toast.error(data?.error ?? t("updateFailed"));
+          toast.error(data?.error ?? t('updateFailed'));
           return;
         }
         onConversationPatched?.(id, patch);
       } catch {
-        toast.error(t("networkError"));
+        toast.error(t('networkError'));
       }
     },
-    [onConversationPatched, t],
+    [onConversationPatched, t]
   );
 
-  const activeFilter = [...TABS.map((x) => ({ ...x, value: x.value })),
-    { value: "open" as InboxFilter, key: "filterOpen" },
-    { value: "pending" as InboxFilter, key: "filterPending" },
-    { value: "closed" as InboxFilter, key: "filterClosed" },
+  const activeFilter = [
+    ...TABS.map((x) => ({ ...x, value: x.value })),
+    { value: 'open' as InboxFilter, key: 'filterOpen' },
+    { value: 'pending' as InboxFilter, key: 'filterPending' },
+    { value: 'closed' as InboxFilter, key: 'filterClosed' },
   ].find((o) => o.value === filter);
 
   return (
-    <div className="flex h-full w-full flex-col border-r border-border bg-card lg:w-80">
-      <div className="space-y-2 border-b border-border p-3">
+    <div className="border-border bg-card flex h-full w-full flex-col border-r lg:w-80">
+      <div className="border-border space-y-2 border-b p-3">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("searchPlaceholder")}
-            className="border-border bg-muted pl-9 text-sm text-foreground placeholder-muted-foreground focus:border-primary/50"
+            placeholder={t('searchPlaceholder')}
+            className="border-border bg-muted text-foreground placeholder-muted-foreground focus:border-primary/50 pl-9 text-sm"
           />
         </div>
 
@@ -446,17 +461,17 @@ export function ConversationList({
                 type="button"
                 onClick={() => setFilter(tab.value)}
                 className={cn(
-                  "inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors",
+                  'inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors',
                   active
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 )}
               >
                 {t(tab.key)}
                 <span
                   className={cn(
-                    "rounded-full px-1 text-[10px]",
-                    active ? "bg-primary/15" : "bg-muted",
+                    'rounded-full px-1 text-[10px]',
+                    active ? 'bg-primary/15' : 'bg-muted'
                   )}
                 >
                   {count}
@@ -467,35 +482,46 @@ export function ConversationList({
           <Popover>
             <PopoverTrigger
               className={cn(
-                "ml-auto inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs",
+                'ml-auto inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs',
                 advancedActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               )}
             >
               <Filter className="h-3 w-3" />
-              {t("filters")}
-              {advancedActive && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+              {t('filters')}
+              {advancedActive && (
+                <span className="bg-primary h-1.5 w-1.5 rounded-full" />
+              )}
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-64 space-y-3 border-border bg-popover p-3">
+            <PopoverContent
+              align="end"
+              className="border-border bg-popover w-64 space-y-3 p-3"
+            >
               <div>
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {t("status")}
+                <p className="text-muted-foreground mb-1 text-[10px] font-semibold tracking-wider uppercase">
+                  {t('status')}
                 </p>
                 <div className="flex flex-wrap gap-1">
-                  {(["open", "pending", "closed"] as const).map((s) => (
+                  {(['open', 'pending', 'closed'] as const).map((s) => (
                     <button
                       key={s}
                       type="button"
-                      onClick={() => setFilter(filter === s ? "all" : s)}
+                      onClick={() => setFilter(filter === s ? 'all' : s)}
                       className={cn(
-                        "rounded-md border px-2 py-1 text-xs",
+                        'rounded-md border px-2 py-1 text-xs',
                         filter === s
-                          ? "border-primary/40 bg-primary/10 text-primary"
-                          : "border-border text-muted-foreground hover:bg-muted",
+                          ? 'border-primary/40 bg-primary/10 text-primary'
+                          : 'border-border text-muted-foreground hover:bg-muted'
                       )}
                     >
-                      {t(s === "open" ? "filterOpen" : s === "pending" ? "filterPending" : "filterClosed")}
+                      {t(
+                        s === 'open'
+                          ? 'filterOpen'
+                          : s === 'pending'
+                            ? 'filterPending'
+                            : 'filterClosed'
+                      )}
                     </button>
                   ))}
                 </div>
@@ -503,8 +529,8 @@ export function ConversationList({
 
               {tags.length > 0 && (
                 <div>
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    {t("tags")}
+                  <p className="text-muted-foreground mb-1 text-[10px] font-semibold tracking-wider uppercase">
+                    {t('tags')}
                   </p>
                   <div className="max-h-32 space-y-1 overflow-y-auto">
                     {tags.map((tag) => (
@@ -513,10 +539,10 @@ export function ConversationList({
                         type="button"
                         onClick={() => toggleTag(tag.id)}
                         className={cn(
-                          "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs",
+                          'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs',
                           selectedTagIds.includes(tag.id)
-                            ? "bg-primary/10 text-primary"
-                            : "text-popover-foreground hover:bg-muted",
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-popover-foreground hover:bg-muted'
                         )}
                       >
                         <span
@@ -532,7 +558,7 @@ export function ConversationList({
 
               {channels.length > 0 && (
                 <div>
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <p className="text-muted-foreground mb-1 text-[10px] font-semibold tracking-wider uppercase">
                     {t('channel')}
                   </p>
                   <div className="max-h-28 overflow-y-auto">
@@ -540,10 +566,10 @@ export function ConversationList({
                       type="button"
                       onClick={() => setSelectedChannelId(null)}
                       className={cn(
-                        "flex w-full rounded-md px-2 py-1 text-left text-xs",
+                        'flex w-full rounded-md px-2 py-1 text-left text-xs',
                         selectedChannelId === null
-                          ? "bg-primary/10 text-primary"
-                          : "text-popover-foreground hover:bg-muted",
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-popover-foreground hover:bg-muted'
                       )}
                     >
                       {t('allChannels')}
@@ -554,10 +580,10 @@ export function ConversationList({
                         type="button"
                         onClick={() => setSelectedChannelId(channel.id)}
                         className={cn(
-                          "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs",
+                          'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs',
                           selectedChannelId === channel.id
-                            ? "bg-primary/10 text-primary"
-                            : "text-popover-foreground hover:bg-muted",
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-popover-foreground hover:bg-muted'
                         )}
                       >
                         <span
@@ -573,7 +599,7 @@ export function ConversationList({
 
               {departments.length > 0 && (
                 <div>
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <p className="text-muted-foreground mb-1 text-[10px] font-semibold tracking-wider uppercase">
                     {t('department')}
                   </p>
                   <div className="max-h-28 overflow-y-auto">
@@ -581,10 +607,10 @@ export function ConversationList({
                       type="button"
                       onClick={() => setSelectedDepartmentId(null)}
                       className={cn(
-                        "flex w-full rounded-md px-2 py-1 text-left text-xs",
+                        'flex w-full rounded-md px-2 py-1 text-left text-xs',
                         selectedDepartmentId === null
-                          ? "bg-primary/10 text-primary"
-                          : "text-popover-foreground hover:bg-muted",
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-popover-foreground hover:bg-muted'
                       )}
                     >
                       {t('allDepartments')}
@@ -595,10 +621,10 @@ export function ConversationList({
                         type="button"
                         onClick={() => setSelectedDepartmentId(department.id)}
                         className={cn(
-                          "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs",
+                          'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs',
                           selectedDepartmentId === department.id
-                            ? "bg-primary/10 text-primary"
-                            : "text-popover-foreground hover:bg-muted",
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-popover-foreground hover:bg-muted'
                         )}
                       >
                         <span
@@ -614,21 +640,21 @@ export function ConversationList({
 
               {companies.length > 0 && (
                 <div>
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    {t("company")}
+                  <p className="text-muted-foreground mb-1 text-[10px] font-semibold tracking-wider uppercase">
+                    {t('company')}
                   </p>
                   <div className="max-h-28 overflow-y-auto">
                     <button
                       type="button"
                       onClick={() => setSelectedCompany(null)}
                       className={cn(
-                        "flex w-full rounded-md px-2 py-1 text-left text-xs",
+                        'flex w-full rounded-md px-2 py-1 text-left text-xs',
                         selectedCompany === null
-                          ? "bg-primary/10 text-primary"
-                          : "text-popover-foreground hover:bg-muted",
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-popover-foreground hover:bg-muted'
                       )}
                     >
-                      {t("allCompanies")}
+                      {t('allCompanies')}
                     </button>
                     {companies.map((co) => (
                       <button
@@ -636,10 +662,10 @@ export function ConversationList({
                         type="button"
                         onClick={() => setSelectedCompany(co)}
                         className={cn(
-                          "flex w-full rounded-md px-2 py-1 text-left text-xs",
+                          'flex w-full rounded-md px-2 py-1 text-left text-xs',
                           selectedCompany === co
-                            ? "bg-primary/10 text-primary"
-                            : "text-popover-foreground hover:bg-muted",
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-popover-foreground hover:bg-muted'
                         )}
                       >
                         <span className="truncate">{co}</span>
@@ -654,11 +680,12 @@ export function ConversationList({
                   type="button"
                   onClick={() => {
                     clearContactFilters();
-                    if (["open", "pending", "closed"].includes(filter)) setFilter("all");
+                    if (['open', 'pending', 'closed'].includes(filter))
+                      setFilter('all');
                   }}
-                  className="w-full rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+                  className="border-border text-muted-foreground hover:bg-muted w-full rounded-md border px-2 py-1 text-xs"
                 >
-                  {t("clearAll")}
+                  {t('clearAll')}
                 </button>
               )}
             </PopoverContent>
@@ -673,13 +700,17 @@ export function ConversationList({
                 <button
                   key={id}
                   onClick={() => toggleTag(id)}
-                  className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground hover:bg-muted/70"
+                  className="bg-muted text-foreground hover:bg-muted/70 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]"
                 >
                   <span
                     className="h-1.5 w-1.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: tag?.color ?? "var(--muted-foreground)" }}
+                    style={{
+                      backgroundColor: tag?.color ?? 'var(--muted-foreground)',
+                    }}
                   />
-                  <span className="max-w-24 truncate">{tag?.name ?? t("tags")}</span>
+                  <span className="max-w-24 truncate">
+                    {tag?.name ?? t('tags')}
+                  </span>
                   <X className="h-3 w-3" />
                 </button>
               );
@@ -687,7 +718,7 @@ export function ConversationList({
             {selectedCompany && (
               <button
                 onClick={() => setSelectedCompany(null)}
-                className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground hover:bg-muted/70"
+                className="bg-muted text-foreground hover:bg-muted/70 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]"
               >
                 <span className="max-w-24 truncate">{selectedCompany}</span>
                 <X className="h-3 w-3" />
@@ -695,40 +726,45 @@ export function ConversationList({
             )}
             <button
               onClick={clearContactFilters}
-              className="px-1 text-[11px] text-muted-foreground hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground px-1 text-[11px]"
             >
-              {t("clearAll")}
+              {t('clearAll')}
             </button>
           </div>
         )}
 
-        {filter !== "all" && !["unread", "waiting", "unassigned", "expiring"].includes(filter) && (
-          <p className="text-[11px] text-muted-foreground">
-            {t("activeFilter", { filter: activeFilter ? t(activeFilter.key) : filter })}
-          </p>
-        )}
+        {filter !== 'all' &&
+          !['unread', 'waiting', 'unassigned', 'expiring'].includes(filter) && (
+            <p className="text-muted-foreground text-[11px]">
+              {t('activeFilter', {
+                filter: activeFilter ? t(activeFilter.key) : filter,
+              })}
+            </p>
+          )}
 
         {/* Bulk bar */}
         {selectedIds.size > 0 && (
-          <div className="flex flex-wrap items-center gap-1 rounded-md border border-primary/20 bg-primary/5 p-1.5">
+          <div className="border-primary/20 bg-primary/5 flex flex-wrap items-center gap-1 rounded-md border p-1.5">
             <button
               type="button"
               onClick={toggleSelectAll}
-              className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-primary"
+              className="text-primary inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px]"
             >
               <CheckCheck className="h-3 w-3" />
-              {t("selectAll")}
+              {t('selectAll')}
             </button>
-            <span className="text-[11px] text-muted-foreground">
-              {t("selectedCount", { count: selectedIds.size })}
+            <span className="text-muted-foreground text-[11px]">
+              {t('selectedCount', { count: selectedIds.size })}
             </span>
             <div className="ml-auto flex items-center gap-1">
               <button
                 type="button"
                 disabled={bulkBusy}
-                onClick={() => void runBulk("mark_read", {}, { unread_count: 0 })}
-                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                title={t("markRead")}
+                onClick={() =>
+                  void runBulk('mark_read', {}, { unread_count: 0 })
+                }
+                className="text-muted-foreground hover:bg-muted hover:text-foreground rounded p-1"
+                title={t('markRead')}
               >
                 <CheckCheck className="h-3.5 w-3.5" />
               </button>
@@ -736,30 +772,39 @@ export function ConversationList({
               <DropdownMenu>
                 <DropdownMenuTrigger
                   disabled={bulkBusy}
-                  className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  title={t("assign")}
+                  className="text-muted-foreground hover:bg-muted hover:text-foreground rounded p-1"
+                  title={t('assign')}
                 >
                   <UserPlus className="h-3.5 w-3.5" />
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="border-border bg-popover">
+                <DropdownMenuContent
+                  align="end"
+                  className="border-border bg-popover"
+                >
                   <DropdownMenuItem
-                    onClick={() => void runBulk("assign", { assigned_agent_id: null }, { assigned_agent_id: null })}
-                    className="text-sm text-popover-foreground"
+                    onClick={() =>
+                      void runBulk(
+                        'assign',
+                        { assigned_agent_id: null },
+                        { assigned_agent_id: null }
+                      )
+                    }
+                    className="text-popover-foreground text-sm"
                   >
                     <UserRoundX className="mr-2 h-3.5 w-3.5" />
-                    {t("unassign")}
+                    {t('unassign')}
                   </DropdownMenuItem>
                   {members.map((m) => (
                     <DropdownMenuItem
                       key={m.user_id}
                       onClick={() =>
                         void runBulk(
-                          "assign",
+                          'assign',
                           { assigned_agent_id: m.user_id },
-                          { assigned_agent_id: m.user_id },
+                          { assigned_agent_id: m.user_id }
                         )
                       }
-                      className="text-sm text-popover-foreground"
+                      className="text-popover-foreground text-sm"
                     >
                       <Users className="mr-2 h-3.5 w-3.5" />
                       {memberLabel(m)}
@@ -771,17 +816,20 @@ export function ConversationList({
               <DropdownMenu>
                 <DropdownMenuTrigger
                   disabled={bulkBusy || tags.length === 0}
-                  className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  title={t("addTag")}
+                  className="text-muted-foreground hover:bg-muted hover:text-foreground rounded p-1"
+                  title={t('addTag')}
                 >
                   <TagIcon className="h-3.5 w-3.5" />
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="border-border bg-popover">
+                <DropdownMenuContent
+                  align="end"
+                  className="border-border bg-popover"
+                >
                   {tags.map((tag) => (
                     <DropdownMenuItem
                       key={tag.id}
-                      onClick={() => void runBulk("tag", { tag_id: tag.id })}
-                      className="text-sm text-popover-foreground"
+                      onClick={() => void runBulk('tag', { tag_id: tag.id })}
+                      className="text-popover-foreground text-sm"
                     >
                       <span
                         className="mr-2 h-2 w-2 rounded-full"
@@ -797,10 +845,14 @@ export function ConversationList({
                 type="button"
                 disabled={bulkBusy}
                 onClick={() =>
-                  void runBulk("close", {}, { status: "closed", unread_count: 0 })
+                  void runBulk(
+                    'close',
+                    {},
+                    { status: 'closed', unread_count: 0 }
+                  )
                 }
-                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                title={t("closeSelected")}
+                className="text-muted-foreground hover:bg-muted hover:text-foreground rounded p-1"
+                title={t('closeSelected')}
               >
                 <Archive className="h-3.5 w-3.5" />
               </button>
@@ -808,11 +860,9 @@ export function ConversationList({
                 <button
                   type="button"
                   disabled={bulkBusy}
-                  onClick={() =>
-                    setDeleteTarget({ ids: [...selectedIds] })
-                  }
-                  className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                  title={t("deleteSelected")}
+                  onClick={() => setDeleteTarget({ ids: [...selectedIds] })}
+                  className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive rounded p-1"
+                  title={t('deleteSelected')}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -820,8 +870,8 @@ export function ConversationList({
               <button
                 type="button"
                 onClick={clearSelection}
-                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                title={t("clearSelection")}
+                className="text-muted-foreground hover:bg-muted hover:text-foreground rounded p-1"
+                title={t('clearSelection')}
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -833,12 +883,14 @@ export function ConversationList({
       <ScrollArea className="min-h-0 flex-1">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <div className="border-primary h-5 w-5 animate-spin rounded-full border-2 border-t-transparent" />
           </div>
         ) : filtered.length === 0 ? (
           <div className="px-4 py-12 text-center">
-            <InboxIcon className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground">{t("noConversations")}</p>
+            <InboxIcon className="text-muted-foreground/50 mx-auto mb-2 h-8 w-8" />
+            <p className="text-muted-foreground text-sm">
+              {t('noConversations')}
+            </p>
           </div>
         ) : (
           <div className="flex flex-col">
@@ -853,11 +905,19 @@ export function ConversationList({
                 currentUserId={user?.id}
                 onSelect={onSelect}
                 onToggleSelected={toggleSelected}
-                onPin={(pinned) => void patchConversation(conv.id, { is_pinned: pinned })}
-                onSnooze={(until) => void patchConversation(conv.id, { snoozed_until: until })}
-                onFollowUp={(at) => void patchConversation(conv.id, { follow_up_at: at })}
+                onPin={(pinned) =>
+                  void patchConversation(conv.id, { is_pinned: pinned })
+                }
+                onSnooze={(until) =>
+                  void patchConversation(conv.id, { snoozed_until: until })
+                }
+                onFollowUp={(at) =>
+                  void patchConversation(conv.id, { follow_up_at: at })
+                }
                 onAssign={(agentId) =>
-                  void patchConversation(conv.id, { assigned_agent_id: agentId })
+                  void patchConversation(conv.id, {
+                    assigned_agent_id: agentId,
+                  })
                 }
                 canDelete={canDelete}
                 onDelete={(conversation) =>
@@ -865,8 +925,8 @@ export function ConversationList({
                     ids: [conversation.id],
                     name:
                       conversation.contact?.name ||
-                      conversation.contact?.phone ||
-                      t("unknown"),
+                      contactHandle(conversation.contact ?? {}) ||
+                      t('unknown'),
                   })
                 }
                 t={t}
@@ -882,11 +942,11 @@ export function ConversationList({
       >
         <DialogContent className="border-border bg-popover text-popover-foreground sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>{t("deleteConfirmTitle")}</DialogTitle>
+            <DialogTitle>{t('deleteConfirmTitle')}</DialogTitle>
             <DialogDescription>
               {deleteTarget?.ids.length === 1
-                ? t("deleteConfirmDesc", { name: deleteTarget.name ?? "" })
-                : t("deleteConfirmBulkDesc", {
+                ? t('deleteConfirmDesc', { name: deleteTarget.name ?? '' })
+                : t('deleteConfirmBulkDesc', {
                     count: deleteTarget?.ids.length ?? 0,
                   })}
             </DialogDescription>
@@ -897,14 +957,14 @@ export function ConversationList({
               onClick={() => setDeleteTarget(null)}
               disabled={deleting}
             >
-              {t("cancel")}
+              {t('cancel')}
             </Button>
             <Button
               variant="destructive"
               onClick={() => void confirmDelete()}
               disabled={deleting}
             >
-              {deleting ? t("deleting") : t("delete")}
+              {deleting ? t('deleting') : t('delete')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -949,7 +1009,8 @@ function ConversationItem({
   t,
 }: ConversationItemProps) {
   const contact = conversation.contact;
-  const displayName = contact?.name || contact?.phone || t("unknown");
+  const displayName =
+    contact?.name || contactHandle(contact ?? {}) || t('unknown');
   const initials = displayName.charAt(0).toUpperCase();
   const attention = attentionLevel(conversation, now);
   const waitingMinutes = minutesWaiting(conversation, now);
@@ -960,7 +1021,7 @@ function ConversationItem({
     ? formatDistanceToNow(new Date(conversation.last_message_at), {
         addSuffix: false,
       })
-    : "";
+    : '';
 
   const handleClick = () => onSelect(conversation);
 
@@ -970,34 +1031,34 @@ function ConversationItem({
       tabIndex={0}
       onClick={handleClick}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+        if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           handleClick();
         }
       }}
       className={cn(
-        "group flex w-full items-start gap-2 px-2 py-3 text-left transition-colors hover:bg-muted/50",
-        isActive && "border-l-2 border-primary bg-muted/70",
-        selected && "bg-primary/5",
+        'group hover:bg-muted/50 flex w-full items-start gap-2 px-2 py-3 text-left transition-colors',
+        isActive && 'border-primary bg-muted/70 border-l-2',
+        selected && 'bg-primary/5'
       )}
     >
       <button
         type="button"
-        aria-label={t("selectConversation")}
+        aria-label={t('selectConversation')}
         onClick={(e) => {
           e.stopPropagation();
           onToggleSelected(conversation.id);
         }}
-        className="mt-1 shrink-0 rounded p-0.5 text-muted-foreground opacity-60 transition-opacity hover:text-foreground group-hover:opacity-100"
+        className="text-muted-foreground hover:text-foreground mt-1 shrink-0 rounded p-0.5 opacity-60 transition-opacity group-hover:opacity-100"
       >
         {selected ? (
-          <CheckSquare className="h-4 w-4 text-primary" />
+          <CheckSquare className="text-primary h-4 w-4" />
         ) : (
           <Square className="h-4 w-4" />
         )}
       </button>
 
-      <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
+      <div className="bg-muted text-foreground relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-medium">
         {contact?.avatar_url ? (
           <img
             src={contact.avatar_url}
@@ -1007,52 +1068,72 @@ function ConversationItem({
         ) : (
           initials
         )}
-        {attention !== "none" && (
+        {attention !== 'none' && (
           <span
             className={cn(
-              "absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card",
-              ATTENTION_DOT[attention],
+              'border-card absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2',
+              ATTENTION_DOT[attention]
             )}
-            title={t("waitingFor", { time: `${waitingMinutes}m` })}
+            title={t('waitingFor', { time: `${waitingMinutes}m` })}
           />
         )}
       </div>
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="flex min-w-0 items-center gap-1 truncate text-sm font-medium text-foreground">
-            {conversation.is_pinned && <Pin className="h-3 w-3 shrink-0 text-primary" />}
+          <span className="text-foreground flex min-w-0 items-center gap-1 truncate text-sm font-medium">
+            {conversation.is_pinned && (
+              <Pin className="text-primary h-3 w-3 shrink-0" />
+            )}
             <span className="truncate">{displayName}</span>
           </span>
-          <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo}</span>
+          <span className="text-muted-foreground shrink-0 text-[10px]">
+            {timeAgo}
+          </span>
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2">
-          <p className="truncate text-xs text-muted-foreground">
+          <p className="text-muted-foreground truncate text-xs">
             {conversation.channel && (
               <span
                 className="mr-1 font-medium"
                 style={{ color: conversation.channel.color }}
               >
                 {conversation.channel.name}
-                {conversation.department ? ` · ${conversation.department.name}` : ""} ·
+                {conversation.department
+                  ? ` · ${conversation.department.name}`
+                  : ''}{' '}
+                ·
               </span>
             )}
             {snoozed
-              ? t("snoozedUntil", { time: formatDistanceToNow(new Date(conversation.snoozed_until!), { addSuffix: true }) })
+              ? t('snoozedUntil', {
+                  time: formatDistanceToNow(
+                    new Date(conversation.snoozed_until!),
+                    { addSuffix: true }
+                  ),
+                })
               : conversation.follow_up_at
-                ? t("followUp", { time: formatDistanceToNow(new Date(conversation.follow_up_at), { addSuffix: true }) })
-                : conversation.last_message_text || t("noMessagesYet")}
+                ? t('followUp', {
+                    time: formatDistanceToNow(
+                      new Date(conversation.follow_up_at),
+                      { addSuffix: true }
+                    ),
+                  })
+                : conversation.last_message_text || t('noMessagesYet')}
           </p>
           <div className="flex shrink-0 items-center gap-1">
             {followUpDue && <Bell className="h-3 w-3 text-amber-500" />}
-            {snoozed && <Clock3 className="h-3 w-3 text-muted-foreground" />}
+            {snoozed && <Clock3 className="text-muted-foreground h-3 w-3" />}
             {conversation.unread_count > 0 && (
-              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+              <span className="bg-primary text-primary-foreground flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold">
                 {conversation.unread_count}
               </span>
             )}
             <span
-              className={cn("h-2 w-2 rounded-full", STATUS_COLORS[conversation.status])}
+              className={cn(
+                'h-2 w-2 rounded-full',
+                STATUS_COLORS[conversation.status]
+              )}
               title={conversation.status}
             />
           </div>
@@ -1062,65 +1143,89 @@ function ConversationItem({
       <DropdownMenu>
         <DropdownMenuTrigger
           onClick={(e) => e.stopPropagation()}
-          className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100 data-[popup-open]:opacity-100"
-          aria-label={t("moreActions")}
+          className="text-muted-foreground hover:bg-muted hover:text-foreground mt-0.5 shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 data-[popup-open]:opacity-100"
+          aria-label={t('moreActions')}
         >
           <MoreVertical className="h-4 w-4" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56 border-border bg-popover">
+        <DropdownMenuContent
+          align="end"
+          className="border-border bg-popover w-56"
+        >
           <DropdownMenuItem
             onClick={() => onPin(!conversation.is_pinned)}
-            className="text-sm text-popover-foreground"
+            className="text-popover-foreground text-sm"
           >
             {conversation.is_pinned ? (
               <PinOff className="mr-2 h-3.5 w-3.5" />
             ) : (
               <Pin className="mr-2 h-3.5 w-3.5" />
             )}
-            {conversation.is_pinned ? t("unpin") : t("pin")}
+            {conversation.is_pinned ? t('unpin') : t('pin')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onSnooze(futureIso(1))} className="text-sm text-popover-foreground">
+          <DropdownMenuItem
+            onClick={() => onSnooze(futureIso(1))}
+            className="text-popover-foreground text-sm"
+          >
             <Clock3 className="mr-2 h-3.5 w-3.5" />
-            {t("snooze1h")}
+            {t('snooze1h')}
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onSnooze(futureIso(3))} className="text-sm text-popover-foreground">
+          <DropdownMenuItem
+            onClick={() => onSnooze(futureIso(3))}
+            className="text-popover-foreground text-sm"
+          >
             <Clock3 className="mr-2 h-3.5 w-3.5" />
-            {t("snooze3h")}
+            {t('snooze3h')}
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onSnooze(tomorrowMorningIso())} className="text-sm text-popover-foreground">
+          <DropdownMenuItem
+            onClick={() => onSnooze(tomorrowMorningIso())}
+            className="text-popover-foreground text-sm"
+          >
             <Clock3 className="mr-2 h-3.5 w-3.5" />
-            {t("snoozeTomorrow")}
+            {t('snoozeTomorrow')}
           </DropdownMenuItem>
           {conversation.snoozed_until && (
-            <DropdownMenuItem onClick={() => onSnooze(null)} className="text-sm text-popover-foreground">
+            <DropdownMenuItem
+              onClick={() => onSnooze(null)}
+              className="text-popover-foreground text-sm"
+            >
               <BellOff className="mr-2 h-3.5 w-3.5" />
-              {t("unsnooze")}
+              {t('unsnooze')}
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onFollowUp(futureIso(2))} className="text-sm text-popover-foreground">
+          <DropdownMenuItem
+            onClick={() => onFollowUp(futureIso(2))}
+            className="text-popover-foreground text-sm"
+          >
             <Bell className="mr-2 h-3.5 w-3.5" />
-            {t("followUp2h")}
+            {t('followUp2h')}
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onFollowUp(tomorrowMorningIso())} className="text-sm text-popover-foreground">
+          <DropdownMenuItem
+            onClick={() => onFollowUp(tomorrowMorningIso())}
+            className="text-popover-foreground text-sm"
+          >
             <Bell className="mr-2 h-3.5 w-3.5" />
-            {t("followUpTomorrow")}
+            {t('followUpTomorrow')}
           </DropdownMenuItem>
           {conversation.follow_up_at && (
-            <DropdownMenuItem onClick={() => onFollowUp(null)} className="text-sm text-popover-foreground">
+            <DropdownMenuItem
+              onClick={() => onFollowUp(null)}
+              className="text-popover-foreground text-sm"
+            >
               <BellOff className="mr-2 h-3.5 w-3.5" />
-              {t("clearFollowUp")}
+              {t('clearFollowUp')}
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => onAssign(currentUserId ?? null)}
             disabled={!currentUserId}
-            className="text-sm text-popover-foreground"
+            className="text-popover-foreground text-sm"
           >
             <UserPlus className="mr-2 h-3.5 w-3.5" />
-            {t("assignToMe")}
+            {t('assignToMe')}
           </DropdownMenuItem>
           {members
             .filter((m) => m.user_id !== currentUserId)
@@ -1128,16 +1233,19 @@ function ConversationItem({
               <DropdownMenuItem
                 key={m.user_id}
                 onClick={() => onAssign(m.user_id)}
-                className="text-sm text-popover-foreground"
+                className="text-popover-foreground text-sm"
               >
                 <Users className="mr-2 h-3.5 w-3.5" />
-                {t("transferTo", { name: memberLabel(m) })}
+                {t('transferTo', { name: memberLabel(m) })}
               </DropdownMenuItem>
             ))}
           {conversation.assigned_agent_id && (
-            <DropdownMenuItem onClick={() => onAssign(null)} className="text-sm text-muted-foreground">
+            <DropdownMenuItem
+              onClick={() => onAssign(null)}
+              className="text-muted-foreground text-sm"
+            >
               <UserRoundX className="mr-2 h-3.5 w-3.5" />
-              {t("leaveQueue")}
+              {t('leaveQueue')}
             </DropdownMenuItem>
           )}
           {canDelete && (
@@ -1145,10 +1253,10 @@ function ConversationItem({
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => onDelete(conversation)}
-                className="text-sm text-destructive focus:text-destructive"
+                className="text-destructive focus:text-destructive text-sm"
               >
                 <Trash2 className="mr-2 h-3.5 w-3.5" />
-                {t("deleteConversation")}
+                {t('deleteConversation')}
               </DropdownMenuItem>
             </>
           )}

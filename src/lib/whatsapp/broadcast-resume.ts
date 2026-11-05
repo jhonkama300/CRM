@@ -18,12 +18,15 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { BroadcastError, type BroadcastPlan } from '@/lib/whatsapp/broadcast-core';
+import {
+  BroadcastError,
+  type BroadcastPlan,
+} from '@/lib/whatsapp/broadcast-core';
 import { DELIVERY_LOCK_STALE_MS } from '@/lib/whatsapp/broadcast-delivery-lease';
 import { chunk } from '@/lib/supabase/paged-query';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
-import { sanitizePhoneForMeta, isValidE164 } from '@/lib/whatsapp/phone-utils';
+import { resolveContactSendTarget } from '@/lib/whatsapp/wa-identity';
 
 /** Which recipients a resume pass picks up. */
 export type ResumeScope = 'pending' | 'failed' | 'all';
@@ -72,7 +75,10 @@ export async function claimBroadcastDelivery(
 
   const { data, error } = await db
     .from('broadcasts')
-    .update({ delivery_locked_at: now.toISOString(), delivery_lease_until: null })
+    .update({
+      delivery_locked_at: now.toISOString(),
+      delivery_lease_until: null,
+    })
     .eq('id', broadcastId)
     .eq('account_id', accountId)
     .or(
@@ -116,13 +122,16 @@ export interface ResumePlan {
 interface RecipientRow {
   id: string;
   template_params: unknown;
-  contact: { phone?: string | null } | { phone?: string | null }[] | null;
+  contact:
+    | { phone?: string | null; wa_user_id?: string | null }
+    | { phone?: string | null; wa_user_id?: string | null }[]
+    | null;
 }
 
 /** Supabase renders an embedded to-one join as an object or a 1-array. */
-function contactPhone(row: RecipientRow): string | null {
+function contactTarget(row: RecipientRow) {
   const c = Array.isArray(row.contact) ? row.contact[0] : row.contact;
-  return c?.phone ?? null;
+  return resolveContactSendTarget(c);
 }
 
 /**
@@ -171,7 +180,9 @@ export async function planBroadcastResume(
       error: recError,
     } = await db
       .from('broadcast_recipients')
-      .select('id, template_params, contact:contacts(phone)', { count: 'exact' })
+      .select('id, template_params, contact:contacts(phone,wa_user_id)', {
+        count: 'exact',
+      })
       .eq('broadcast_id', broadcastId)
       .in('status', statuses)
       // Oldest first, so repeated capped passes chew through the backlog
@@ -181,7 +192,10 @@ export async function planBroadcastResume(
       .range(from, from + RESUME_MAX_PER_REQUEST - 1);
 
     if (recError) {
-      console.error('[broadcast-resume] recipient load failed:', recError.message);
+      console.error(
+        '[broadcast-resume] recipient load failed:',
+        recError.message
+      );
       throw new BroadcastError('internal', 'Failed to load recipients', 500);
     }
 
@@ -189,12 +203,11 @@ export async function planBroadcastResume(
     if (page === 0) inScopeCount = count ?? null;
     scanned += rows.length;
 
-    // A recipient whose contact has no usable phone can never send. Stamp
-    // it failed now: leaving it 'pending' would keep the broadcast in
-    // 'sending' forever, which is the very symptom being fixed.
+    // A recipient whose contact has neither a phone nor a BSUID can never
+    // send. Stamp it failed now: leaving it 'pending' would keep the
+    // broadcast in 'sending' forever, which is the symptom being fixed.
     for (const row of rows) {
-      const sanitized = sanitizePhoneForMeta(contactPhone(row) ?? '');
-      if (isValidE164(sanitized)) sendable.push(row);
+      if (contactTarget(row)) sendable.push(row);
       else unsendable.push(row.id);
     }
 
@@ -259,13 +272,22 @@ export async function planBroadcastResume(
     phoneNumberId: config.phone_number_id,
     accessToken: decrypt(config.access_token),
     templateRow: resolvedTemplate.row,
-    planned: slice.map((row) => ({
-      recipientRowId: row.id,
-      phone: sanitizePhoneForMeta(contactPhone(row) ?? ''),
-      params: Array.isArray(row.template_params)
-        ? row.template_params.filter((p): p is string => typeof p === 'string')
-        : [],
-    })),
+    planned: slice.flatMap((row) => {
+      const target = contactTarget(row);
+      if (!target) return [];
+      return [
+        {
+          recipientRowId: row.id,
+          phone: target.target,
+          ...(target.isPhone ? {} : { isPhone: false }),
+          params: Array.isArray(row.template_params)
+            ? row.template_params.filter(
+                (p): p is string => typeof p === 'string'
+              )
+            : [],
+        },
+      ];
+    }),
     rejected: 0,
   };
 

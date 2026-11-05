@@ -2,6 +2,7 @@
 
 import { Suspense, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Building2, Settings2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { useAuth } from '@/hooks/use-auth';
@@ -16,7 +17,6 @@ import { PipelinesSettings } from '@/components/settings/pipelines-settings';
 import { WorkTimePanel } from '@/components/settings/worktime-panel';
 import { DealsSettings } from '@/components/settings/deals-settings';
 import { InboxSettings } from '@/components/settings/inbox-settings';
-import { OrganizationPanel } from '@/components/settings/organization-panel';
 import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import { HealthPanel } from '@/components/settings/health-panel';
@@ -45,7 +45,7 @@ export default function SettingsPage() {
 function SettingsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { defaultCurrency } = useAuth();
+  const { defaultCurrency, account } = useAuth();
   const t = useTranslations('Settings');
 
   // The URL (`?tab=`) is the single source of truth for the active
@@ -53,7 +53,6 @@ function SettingsPageInner() {
   // app sidebar/header working. Legacy tab values (tags, custom-fields)
   // resolve onto their new home; unknown/empty → the Overview landing.
   const section = resolveSection(searchParams.get('tab'));
-
   const go = (next: SettingsSection) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set('tab', next);
@@ -78,7 +77,6 @@ function SettingsPageInner() {
     worktime: <WorkTimePanel />,
     inbox: <InboxSettings />,
     deals: <DealsSettings />,
-    organization: <OrganizationPanel />,
     members: <MembersTab />,
     health: <HealthPanel />,
     audit: <AuditLogPanel />,
@@ -87,16 +85,31 @@ function SettingsPageInner() {
 
   return (
     <div>
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          {t('pageTitle')}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t('pageDesc')}
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          <span className="bg-primary/10 text-primary flex size-11 shrink-0 items-center justify-center rounded-2xl">
+            <Settings2 className="size-5" />
+          </span>
+          <div>
+            <h1 className="text-foreground text-2xl font-bold tracking-tight">
+              {t('pageTitle')}
+            </h1>
+            <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
+              {t('pageDesc')}
+            </p>
+          </div>
+        </div>
+        {account?.name ? (
+          <span className="border-border bg-card text-muted-foreground inline-flex items-center gap-2 self-start rounded-full border px-3 py-1.5 text-xs">
+            <Building2 className="text-primary size-3.5" />
+            <span className="text-foreground max-w-48 truncate font-medium">
+              {account.name}
+            </span>
+          </span>
+        ) : null}
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-start">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[256px_minmax(0,1fr)] lg:items-start">
         <SettingsRail active={section} onSelect={go} hints={hints} />
         <div className="min-w-0">{panel[section]}</div>
       </div>

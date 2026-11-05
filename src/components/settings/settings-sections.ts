@@ -8,7 +8,6 @@ import {
   KeyRound,
   LayoutGrid,
   MessageCircle,
-  Network,
   PlugZap,
   ScrollText,
   Tags,
@@ -37,7 +36,6 @@ export const SETTINGS_SECTIONS = [
   'pipelines',
   'worktime',
   'deals',
-  'organization',
   'members',
   'health',
   'audit',
@@ -57,24 +55,86 @@ export interface SectionMeta {
 }
 
 export const SECTION_META: Record<SettingsSection, SectionMeta> = {
-  overview: { id: 'overview', label: 'Overview', icon: LayoutGrid, group: 'top' },
-  whatsapp: { id: 'whatsapp', label: 'WhatsApp', icon: PlugZap, group: 'workspace' },
-  channels: { id: 'channels', label: 'Channels', icon: MessageCircle, group: 'workspace' },
-  templates: { id: 'templates', label: 'Templates', icon: FileText, group: 'workspace' },
-  'quick-replies': { id: 'quick-replies', label: 'Quick replies', icon: Zap, group: 'workspace' },
+  overview: {
+    id: 'overview',
+    label: 'Overview',
+    icon: LayoutGrid,
+    group: 'top',
+  },
+  whatsapp: {
+    id: 'whatsapp',
+    label: 'WhatsApp',
+    icon: PlugZap,
+    group: 'workspace',
+  },
+  channels: {
+    id: 'channels',
+    label: 'Channels',
+    icon: MessageCircle,
+    group: 'workspace',
+  },
+  templates: {
+    id: 'templates',
+    label: 'Templates',
+    icon: FileText,
+    group: 'workspace',
+  },
+  'quick-replies': {
+    id: 'quick-replies',
+    label: 'Quick replies',
+    icon: Zap,
+    group: 'workspace',
+  },
   inbox: { id: 'inbox', label: 'Inbox', icon: Inbox, group: 'workspace' },
-  fields: { id: 'fields', label: 'Fields & tags', icon: Tags, group: 'workspace' },
-  pipelines: { id: 'pipelines', label: 'Pipelines', icon: GitBranch, group: 'workspace' },
-  worktime: { id: 'worktime', label: 'Work time', icon: Clock, group: 'workspace' },
-  deals: { id: 'deals', label: 'Deals & currency', icon: Coins, group: 'workspace' },
-  organization: { id: 'organization', label: 'Company structure', icon: Network, group: 'workspace' },
-  members: { id: 'members', label: 'Team members', icon: UsersRound, group: 'workspace' },
-  health: { id: 'health', label: 'Health', icon: HeartPulse, group: 'workspace' },
-  audit: { id: 'audit', label: 'Audit log', icon: ScrollText, group: 'workspace' },
+  fields: {
+    id: 'fields',
+    label: 'Fields & tags',
+    icon: Tags,
+    group: 'workspace',
+  },
+  pipelines: {
+    id: 'pipelines',
+    label: 'Pipelines',
+    icon: GitBranch,
+    group: 'workspace',
+  },
+  worktime: {
+    id: 'worktime',
+    label: 'Work time',
+    icon: Clock,
+    group: 'workspace',
+  },
+  deals: {
+    id: 'deals',
+    label: 'Deals & currency',
+    icon: Coins,
+    group: 'workspace',
+  },
+  members: {
+    id: 'members',
+    label: 'Team members',
+    icon: UsersRound,
+    group: 'workspace',
+  },
+  health: {
+    id: 'health',
+    label: 'Health',
+    icon: HeartPulse,
+    group: 'workspace',
+  },
+  audit: {
+    id: 'audit',
+    label: 'Audit log',
+    icon: ScrollText,
+    group: 'workspace',
+  },
   api: { id: 'api', label: 'API keys', icon: KeyRound, group: 'workspace' },
 };
 
-export const RAIL_GROUPS: { label: string | null; group: SectionMeta['group'] }[] = [
+export const RAIL_GROUPS: {
+  label: string | null;
+  group: SectionMeta['group'];
+}[] = [
   { label: null, group: 'top' },
   { label: 'Workspace', group: 'workspace' },
 ];

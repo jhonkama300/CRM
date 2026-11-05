@@ -1,29 +1,40 @@
-"use client";
+"use client"
 
-import type { Deal, PipelineStage } from "@/types";
-import { Calendar, Check, MessageCircle, X } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useEffect, useMemo, useState } from "react"
+import type { Deal, PipelineStage } from "@/types"
+import {
+  AlertTriangle,
+  Calendar,
+  Check,
+  Clock3,
+  GripVertical,
+  MessageCircle,
+  X,
+} from "lucide-react"
+import { useLocale, useTranslations } from "next-intl"
+
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { cn } from "@/lib/utils"
 
 interface DealCardProps {
-  deal: Deal;
-  stage: PipelineStage | null;
-  onEdit: (deal: Deal) => void;
-  onOpenChat?: (deal: Deal) => void;
-  isOverlay?: boolean;
+  deal: Deal
+  stage: PipelineStage | null
+  onEdit: (deal: Deal) => void
+  onOpenChat?: (deal: Deal) => void
+  isOverlay?: boolean
 }
 
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
+const DAY_MS = 24 * 60 * 60 * 1000
+const STALLED_DAYS = 7
 
 function initials(name?: string, fallback?: string) {
-  const source = (name || fallback || "?").trim();
-  if (!source) return "?";
-  return source.charAt(0).toUpperCase();
+  const source = (name || fallback || "?").trim()
+  if (!source) return "?"
+  return source
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("")
 }
 
 export function DealCard({
@@ -33,103 +44,187 @@ export function DealCard({
   onOpenChat,
   isOverlay,
 }: DealCardProps) {
-  const t = useTranslations("Pipelines.card");
-  const contactLabel = deal.contact?.name || deal.contact?.phone || t("noContact");
-  const assigneeLabel = deal.assignee?.full_name || null;
+  const t = useTranslations("Pipelines.card")
+  const locale = useLocale()
+  const [now, setNow] = useState(0)
+  const contactLabel =
+    deal.contact?.name || deal.contact?.phone || t("noContact")
+  const assigneeLabel = deal.assignee?.full_name || null
+  const updatedAt = deal.updated_at ?? deal.created_at
+
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    setNow(Date.now())
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  const relative = useMemo(() => {
+    const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" })
+    return (value: string) => {
+      const current = now || new Date(value).getTime()
+      const diffMs = new Date(value).getTime() - current
+      const absMs = Math.abs(diffMs)
+      if (absMs < 60 * 60 * 1000) {
+        return rtf.format(Math.round(diffMs / (60 * 1000)), "minute")
+      }
+      if (absMs < DAY_MS) {
+        return rtf.format(Math.round(diffMs / (60 * 60 * 1000)), "hour")
+      }
+      return rtf.format(Math.round(diffMs / DAY_MS), "day")
+    }
+  }, [locale, now])
+
+  const closeDate = useMemo(() => {
+    if (!deal.expected_close_date) return null
+    return new Intl.DateTimeFormat(locale, {
+      day: "numeric",
+      month: "short",
+    }).format(new Date(deal.expected_close_date))
+  }, [deal.expected_close_date, locale])
+
+  const ageDays = now
+    ? (now - new Date(updatedAt).getTime()) / DAY_MS
+    : 0
+  const stalled =
+    deal.status !== "won" && deal.status !== "lost" && ageDays >= STALLED_DAYS
 
   return (
     <div
       role="button"
       tabIndex={isOverlay ? -1 : 0}
       onClick={(e) => {
-        // `onClick` still fires after a non-drag tap because the PointerSensor
-        // requires 5px movement before it counts as a drag.
-        if (isOverlay) return;
-        e.stopPropagation();
-        onEdit(deal);
+        if (isOverlay) return
+        e.stopPropagation()
+        onEdit(deal)
       }}
       onKeyDown={(e) => {
-        if (isOverlay) return;
+        if (isOverlay) return
         if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onEdit(deal);
+          e.preventDefault()
+          onEdit(deal)
         }
       }}
-      className={`group relative w-full cursor-pointer rounded-xl border border-border/50 bg-muted/70 pl-4 pr-3 py-3 text-left shadow-sm transition-all ${
+      className={cn(
+        "group relative w-full cursor-pointer overflow-hidden rounded-lg border border-border bg-card text-left shadow-sm transition-all",
         isOverlay
           ? "shadow-xl"
-          : "hover:-translate-y-0.5 hover:border-border hover:bg-muted hover:shadow-lg"
-      }`}
+          : "hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-[0_8px_24px_-12px_rgba(139,92,246,0.35)]",
+      )}
     >
-      {/* 4px left accent bar using stage color */}
       <span
         aria-hidden
-        className="absolute left-0 top-0 h-full w-1 rounded-l-xl"
+        className="absolute inset-y-0 left-0 w-1"
         style={{ backgroundColor: stage?.color ?? "#94a3b8" }}
       />
 
-      <div className="flex items-start justify-between gap-2">
-        <h4 className="flex-1 text-sm font-semibold leading-snug text-foreground break-words">
-          {deal.title}
-        </h4>
-        {deal.status === "won" && (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
-            <Check className="h-3 w-3" />
-            {t("won")}
-          </span>
-        )}
-        {deal.status === "lost" && (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-400">
-            <X className="h-3 w-3" />
-            {t("lost")}
-          </span>
-        )}
-      </div>
-
-      {/* Contact row */}
-      <div className="mt-2 flex items-center gap-2">
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-foreground">
-          {initials(deal.contact?.name, deal.contact?.phone)}
-        </span>
-        <span className="truncate text-xs text-muted-foreground">{contactLabel}</span>
-      </div>
-
-      <div className="mt-2 flex items-center justify-between gap-2">
-        {onOpenChat && !isOverlay ? (
-          <button
-            type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenChat(deal);
-            }}
-            title={t("openChat")}
-            aria-label={t("openChat")}
-            className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
-          >
-            <MessageCircle className="h-3.5 w-3.5" />
-          </button>
-        ) : (
-          <span />
-        )}
-        {deal.expected_close_date && (
-          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Calendar className="h-3 w-3" />
-            {formatDate(deal.expected_close_date)}
-          </span>
-        )}
-      </div>
-
-      {assigneeLabel && (
-        <div className="mt-2 flex items-center justify-end">
-          <span
-            title={assigneeLabel}
-            className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[10px] font-semibold text-primary"
-          >
-            {initials(assigneeLabel)}
-          </span>
+      <div className="py-2.5 pl-3.5 pr-2.5">
+        <div className="flex items-start gap-1.5">
+          <h4 className="min-w-0 flex-1 text-[12.5px] font-semibold leading-snug text-foreground break-words">
+            {deal.title}
+          </h4>
+          <GripVertical
+            aria-hidden
+            className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+          />
         </div>
-      )}
+
+        <div className="mt-2 flex items-center gap-2">
+          <Avatar className="size-6 shrink-0">
+            {deal.contact?.avatar_url ? (
+              <AvatarImage
+                src={deal.contact.avatar_url}
+                alt={contactLabel}
+              />
+            ) : null}
+            <AvatarFallback className="bg-muted text-[9px] font-semibold text-foreground">
+              {initials(deal.contact?.name, deal.contact?.phone)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[11px] font-medium text-foreground">
+              {contactLabel}
+            </p>
+            {deal.contact?.name && deal.contact.phone ? (
+              <p className="truncate text-[9.5px] text-muted-foreground">
+                {deal.contact.phone}
+              </p>
+            ) : deal.contact?.company ? (
+              <p className="truncate text-[9.5px] text-muted-foreground">
+                {deal.contact.company}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        {(deal.status === "won" || deal.status === "lost" || stalled) && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {deal.status === "won" && (
+              <span className="inline-flex items-center gap-1 rounded border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-400">
+                <Check className="h-3 w-3" />
+                {t("won")}
+              </span>
+            )}
+            {deal.status === "lost" && (
+              <span className="inline-flex items-center gap-1 rounded border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-rose-400">
+                <X className="h-3 w-3" />
+                {t("lost")}
+              </span>
+            )}
+            {stalled && (
+              <span className="inline-flex items-center gap-1 rounded border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400">
+                <AlertTriangle className="h-3 w-3" />
+                {t("stalled")}
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border/70 pt-2">
+          <span className="inline-flex min-w-0 items-center gap-1 text-[9.5px] text-muted-foreground">
+            <Clock3 className="h-3 w-3 shrink-0" />
+            <span className="truncate">{relative(updatedAt)}</span>
+          </span>
+
+          <div className="flex shrink-0 items-center gap-1.5">
+            {closeDate && (
+              <span className="inline-flex items-center gap-1 rounded border border-border bg-muted/50 px-1.5 py-0.5 text-[9px] text-muted-foreground">
+                <Calendar className="h-2.5 w-2.5" />
+                {closeDate}
+              </span>
+            )}
+            {assigneeLabel && (
+              <Avatar className="size-5" title={assigneeLabel}>
+                {deal.assignee?.avatar_url ? (
+                  <AvatarImage
+                    src={deal.assignee.avatar_url}
+                    alt={assigneeLabel}
+                  />
+                ) : null}
+                <AvatarFallback className="bg-primary/15 text-[8px] font-semibold text-primary">
+                  {initials(assigneeLabel)}
+                </AvatarFallback>
+              </Avatar>
+            )}
+            {onOpenChat && !isOverlay ? (
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onOpenChat(deal)
+                }}
+                title={t("openChat")}
+                aria-label={t("openChat")}
+                className="inline-flex h-6 w-6 items-center justify-center rounded border border-border bg-card text-muted-foreground transition-all hover:border-primary/40 hover:text-primary focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 sm:opacity-0 sm:group-hover:opacity-100"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
     </div>
-  );
+  )
 }

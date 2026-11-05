@@ -6,7 +6,6 @@ import {
   BackgroundVariant,
   Controls,
   Handle,
-  MarkerType,
   MiniMap,
   Panel,
   Position,
@@ -27,6 +26,7 @@ import {
   Plus,
   Rows3,
   Trash2,
+  UsersRound,
   UserPlus,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -62,8 +62,10 @@ interface DepartmentNodeData extends Record<string, unknown> {
 type DepartmentNodeType = Node<DepartmentNodeData, 'department'>;
 type OrgNodeType = DepartmentNodeType | CompanyNodeType;
 
-const NODE_WIDTH = 260;
-const NODE_HEIGHT = 140;
+const NODE_WIDTH = 280;
+const NODE_HEIGHT = 196;
+const COMPANY_WIDTH = 280;
+const COMPANY_HEIGHT = 196;
 
 function initials(label: string): string {
   return label
@@ -110,10 +112,10 @@ function DepartmentNode({ data, selected }: NodeProps<DepartmentNodeType>) {
         } as React.CSSProperties
       }
       className={cn(
-        'group bg-card relative w-[250px] rounded-xl border px-3.5 py-3 text-left shadow-[0_2px_6px_rgba(0,0,0,0.18)] transition-[box-shadow,border-color]',
+        'group bg-card relative flex h-[196px] w-[280px] flex-col rounded-xl border px-3.5 py-3 text-left shadow-[0_2px_6px_rgba(0,0,0,0.18)] transition-[box-shadow,border-color]',
         selected
           ? 'border-[var(--nc)]'
-          : 'border-border hover:border-[var(--nc)]',
+          : 'border-border hover:border-[var(--nc)]'
       )}
       onDoubleClick={() => onEdit(department)}
     >
@@ -121,6 +123,11 @@ function DepartmentNode({ data, selected }: NodeProps<DepartmentNodeType>) {
         type="target"
         position={Position.Top}
         className="!bg-card !h-2.5 !w-2.5 !border-2 !border-[var(--nc)]"
+      />
+      <span
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-0.5 rounded-t-xl"
+        style={{ backgroundColor: color }}
       />
 
       <div className="flex items-center gap-2">
@@ -137,7 +144,7 @@ function DepartmentNode({ data, selected }: NodeProps<DepartmentNodeType>) {
           {t('departmentLabel')}
         </span>
         {isOwnDepartment && (
-          <span className="rounded-full bg-primary px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-primary-foreground">
+          <span className="bg-primary text-primary-foreground rounded-full px-1.5 py-0.5 text-[8px] font-semibold tracking-wide uppercase">
             {t('yourDepartment')}
           </span>
         )}
@@ -146,18 +153,18 @@ function DepartmentNode({ data, selected }: NodeProps<DepartmentNodeType>) {
         </span>
       </div>
 
-      <div className="text-foreground mt-2 truncate font-mono text-[12px] font-semibold">
+      <div className="text-foreground mt-2 truncate text-[13px] font-semibold">
         {department.name}
       </div>
 
-      <div className="text-muted-foreground mt-1 line-clamp-2 text-xs leading-relaxed">
+      <div className="text-muted-foreground mt-1 line-clamp-2 min-h-8 text-[11px] leading-relaxed">
         {t('subdepartmentsCount', { count: childCount })}
         {managerName ? ` · ${t('managerLabel', { name: managerName })}` : ''}
       </div>
 
       <div className="border-border mt-2.5 flex items-center gap-1.5 border-t pt-2.5">
         {visibleMembers.length === 0 ? (
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-muted-foreground text-[10px]">
             {t('noMembers')}
           </span>
         ) : (
@@ -169,7 +176,7 @@ function DepartmentNode({ data, selected }: NodeProps<DepartmentNodeType>) {
                 return (
                   <span
                     key={membership.id}
-                    className="flex h-5 w-5 items-center justify-center rounded-full border border-card bg-muted text-[8px] font-semibold text-foreground"
+                    className="border-card bg-muted text-foreground flex h-5 w-5 items-center justify-center rounded-full border text-[8px] font-semibold"
                     title={label}
                   >
                     {initials(label)}
@@ -178,14 +185,14 @@ function DepartmentNode({ data, selected }: NodeProps<DepartmentNodeType>) {
               })}
             </div>
             {members.length > visibleMembers.length && (
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-muted-foreground text-[10px]">
                 +{members.length - visibleMembers.length}
               </span>
             )}
           </>
         )}
         {pendingInvites > 0 && (
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-muted-foreground text-[10px]">
             · {t('pendingInvitesCountShort', { count: pendingInvites })}
           </span>
         )}
@@ -197,7 +204,7 @@ function DepartmentNode({ data, selected }: NodeProps<DepartmentNodeType>) {
                 e.stopPropagation();
                 onInvite(department);
               }}
-              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-primary"
+              className="text-muted-foreground hover:bg-muted hover:text-primary rounded p-1"
               title={t('invite')}
             >
               <MailPlus className="h-3 w-3" />
@@ -208,7 +215,7 @@ function DepartmentNode({ data, selected }: NodeProps<DepartmentNodeType>) {
                 e.stopPropagation();
                 onAddMember(department);
               }}
-              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-primary"
+              className="text-muted-foreground hover:bg-muted hover:text-primary rounded p-1"
               title={t('addMember')}
             >
               <UserPlus className="h-3 w-3" />
@@ -219,7 +226,7 @@ function DepartmentNode({ data, selected }: NodeProps<DepartmentNodeType>) {
                 e.stopPropagation();
                 onAddChild(department);
               }}
-              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="text-muted-foreground hover:bg-muted hover:text-foreground rounded p-1"
               title={t('addSubdepartment')}
             >
               <Plus className="h-3 w-3" />
@@ -230,7 +237,7 @@ function DepartmentNode({ data, selected }: NodeProps<DepartmentNodeType>) {
                 e.stopPropagation();
                 onEdit(department);
               }}
-              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="text-muted-foreground hover:bg-muted hover:text-foreground rounded p-1"
               title={t('edit')}
             >
               <Pencil className="h-3 w-3" />
@@ -241,7 +248,7 @@ function DepartmentNode({ data, selected }: NodeProps<DepartmentNodeType>) {
                 e.stopPropagation();
                 onDelete(department);
               }}
-              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+              className="text-muted-foreground hover:bg-muted hover:text-destructive rounded p-1"
               title={t('delete')}
             >
               <Trash2 className="h-3 w-3" />
@@ -255,23 +262,31 @@ function DepartmentNode({ data, selected }: NodeProps<DepartmentNodeType>) {
         position={Position.Bottom}
         className="!bg-card !h-2.5 !w-2.5 !border-2 !border-[var(--nc)]"
       />
-      {childCount > 0 && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggle(department);
-          }}
-          className="nodrag nopan border-border text-muted-foreground hover:text-foreground mt-2 flex w-full items-center justify-between border-t pt-2 text-[10px] font-medium"
-        >
-          <span>{t('subdepartmentsCount', { count: childCount })}</span>
-          {collapsed ? (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (childCount > 0) onToggle(department);
+        }}
+        disabled={childCount === 0}
+        className={cn(
+          'nodrag nopan border-border text-muted-foreground mt-auto flex w-full items-center justify-between border-t pt-2 text-[10px] font-medium',
+          childCount > 0
+            ? 'hover:text-foreground cursor-pointer'
+            : 'cursor-default opacity-60'
+        )}
+      >
+        <span>{t('subdepartmentsCount', { count: childCount })}</span>
+        {childCount > 0 ? (
+          collapsed ? (
             <ChevronDown className="h-3.5 w-3.5" />
           ) : (
             <ChevronUp className="h-3.5 w-3.5" />
-          )}
-        </button>
-      )}
+          )
+        ) : (
+          <span className="border-border h-3.5 w-3.5 rounded-full border border-dashed" />
+        )}
+      </button>
     </div>
   );
 }
@@ -292,21 +307,35 @@ type CompanyNodeType = Node<CompanyNodeData, 'company'>;
 
 function CompanyNode({ data }: NodeProps<CompanyNodeType>) {
   const t = useTranslations('Settings.organization');
-  const { name, totalMembers, members, departmentCount, canEdit, collapsed, onAddRoot, onToggle, onInvite } = data;
+  const {
+    name,
+    totalMembers,
+    members,
+    departmentCount,
+    canEdit,
+    collapsed,
+    onAddRoot,
+    onToggle,
+    onInvite,
+  } = data;
 
   return (
-    <div className="relative w-[280px] rounded-xl border-2 border-primary/40 bg-card px-4 py-3.5 text-left shadow-[0_10px_30px_-12px_rgba(0,0,0,0.35)]">
-      <span className="absolute -top-2.5 right-3 rounded-full bg-primary px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary-foreground">
+    <div className="border-primary/40 bg-card relative flex h-[196px] w-[280px] flex-col rounded-xl border-2 px-4 py-3.5 text-left shadow-[0_10px_30px_-12px_rgba(0,0,0,0.35)]">
+      <span className="bg-primary text-primary-foreground absolute -top-2.5 right-3 rounded-full px-2 py-0.5 text-[9px] font-semibold tracking-wide uppercase">
         {t('yourCompany')}
       </span>
       <div className="flex items-start gap-2.5">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <span className="bg-primary/10 text-primary flex h-9 w-9 shrink-0 items-center justify-center rounded-lg">
           <Building2 className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-foreground">{name}</p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">{t('employees')}</p>
-          <span className="mt-1 inline-flex rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] text-foreground">
+          <p className="text-foreground truncate text-sm font-semibold">
+            {name}
+          </p>
+          <p className="text-muted-foreground mt-0.5 text-[11px]">
+            {t('employees')}
+          </p>
+          <span className="border-border bg-muted text-foreground mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px]">
             {t('membersCount', { count: totalMembers })}
           </span>
         </div>
@@ -319,7 +348,7 @@ function CompanyNode({ data }: NodeProps<CompanyNodeType>) {
                   e.stopPropagation();
                   onInvite();
                 }}
-                className="nodrag nopan rounded p-1 text-muted-foreground hover:bg-muted hover:text-primary"
+                className="nodrag nopan text-muted-foreground hover:bg-muted hover:text-primary rounded p-1"
                 title={t('invite')}
               >
                 <UserPlus className="h-3.5 w-3.5" />
@@ -330,7 +359,7 @@ function CompanyNode({ data }: NodeProps<CompanyNodeType>) {
                   e.stopPropagation();
                   onAddRoot();
                 }}
-                className="nodrag nopan rounded p-1 text-muted-foreground hover:bg-muted hover:text-primary"
+                className="nodrag nopan text-muted-foreground hover:bg-muted hover:text-primary rounded p-1"
                 title={t('addDepartment')}
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -339,12 +368,12 @@ function CompanyNode({ data }: NodeProps<CompanyNodeType>) {
           )}
         </div>
       </div>
-      <div className="mt-2 flex items-center gap-1.5 border-t border-border pt-2">
+      <div className="border-border mt-2 flex items-center gap-1.5 border-t pt-2">
         <div className="flex -space-x-1.5">
           {members.slice(0, 5).map((member) => (
             <span
               key={member.user_id}
-              className="flex h-5 w-5 items-center justify-center rounded-full border border-card bg-muted text-[8px] font-semibold text-foreground"
+              className="border-card bg-muted text-foreground flex h-5 w-5 items-center justify-center rounded-full border text-[8px] font-semibold"
               title={member.full_name || member.email || 'U'}
             >
               {initials(member.full_name || member.email || 'U')}
@@ -352,9 +381,11 @@ function CompanyNode({ data }: NodeProps<CompanyNodeType>) {
           ))}
         </div>
         {members.length > 5 && (
-          <span className="text-[10px] text-muted-foreground">+{members.length - 5}</span>
+          <span className="text-muted-foreground text-[10px]">
+            +{members.length - 5}
+          </span>
         )}
-        <span className="ml-auto text-[10px] text-muted-foreground">
+        <span className="text-muted-foreground ml-auto text-[10px]">
           {t('totalEmployees')}: {totalMembers}
         </span>
       </div>
@@ -364,15 +395,19 @@ function CompanyNode({ data }: NodeProps<CompanyNodeType>) {
           e.stopPropagation();
           onToggle();
         }}
-        className="nodrag nopan mt-2 flex w-full items-center justify-between border-t border-border pt-2 text-[10px] font-medium text-muted-foreground hover:text-foreground"
+        className="nodrag nopan border-border text-muted-foreground hover:text-foreground mt-auto flex w-full items-center justify-between border-t pt-2 text-[10px] font-medium"
       >
         <span>{t('subdepartmentsCount', { count: departmentCount })}</span>
-        {collapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+        {collapsed ? (
+          <ChevronDown className="h-3.5 w-3.5" />
+        ) : (
+          <ChevronUp className="h-3.5 w-3.5" />
+        )}
       </button>
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!bg-card !h-2.5 !w-2.5 !border-2 !border-primary"
+        className="!bg-card !border-primary !h-2.5 !w-2.5 !border-2"
       />
     </div>
   );
@@ -397,6 +432,9 @@ export interface OrganizationCanvasProps {
   onInvite: (department: Department) => void;
   invitationsByDepartment: Map<string, AccountInvitation[]>;
   onPositionChange: (id: string, x: number, y: number) => void;
+  className?: string;
+  fitMinZoom?: number;
+  showAddButton?: boolean;
 }
 
 function OrganizationCanvasInner({
@@ -416,9 +454,15 @@ function OrganizationCanvasInner({
   onInvite,
   invitationsByDepartment,
   onPositionChange,
+  className,
+  fitMinZoom = 0.78,
+  showAddButton = true,
 }: OrganizationCanvasProps) {
   const t = useTranslations('Settings.organization');
   const [levelMode, setLevelMode] = useState(true);
+  const [freePositions, setFreePositions] = useState<
+    Map<string, { x: number; y: number }>
+  >(new Map());
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const companyCollapsed = collapsed.has('__company__');
 
@@ -470,10 +514,7 @@ function OrganizationCanvasInner({
     const map = new Map<string, number>();
     for (const department of departments) {
       if (!department.parent_id) continue;
-      map.set(
-        department.parent_id,
-        (map.get(department.parent_id) ?? 0) + 1,
-      );
+      map.set(department.parent_id, (map.get(department.parent_id) ?? 0) + 1);
     }
     return map;
   }, [departments]);
@@ -487,12 +528,6 @@ function OrganizationCanvasInner({
         target: d.id,
         type: 'smoothstep',
         style: { stroke: 'var(--border)', strokeWidth: 1.5 },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: 'var(--muted-foreground)',
-          width: 14,
-          height: 14,
-        },
       }));
     if (!companyCollapsed) {
       for (const root of visibleDepartments.filter((d) => !d.parent_id)) {
@@ -502,12 +537,6 @@ function OrganizationCanvasInner({
           target: root.id,
           type: 'smoothstep',
           style: { stroke: 'var(--border)', strokeWidth: 1.5 },
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            color: 'var(--muted-foreground)',
-            width: 14,
-            height: 14,
-          },
         });
       }
     }
@@ -520,24 +549,28 @@ function OrganizationCanvasInner({
   const layout = useMemo(
     () =>
       autoLayout(
-        departments.map((d) => ({
-          id: d.id,
-          width: NODE_WIDTH,
-          height: NODE_HEIGHT,
-        })),
-        edges
-          .filter((e) => e.source !== '__company__')
-          .map((e) => ({ source: e.source, target: e.target })),
-
+        [
+          {
+            id: '__company__',
+            width: COMPANY_WIDTH,
+            height: COMPANY_HEIGHT,
+          },
+          ...visibleDepartments.map((d) => ({
+            id: d.id,
+            width: NODE_WIDTH,
+            height: NODE_HEIGHT,
+          })),
+        ],
+        edges.map((e) => ({ source: e.source, target: e.target })),
         {
           direction: 'TB',
-          rankSep: 90,
-          nodeSep: 40,
+          rankSep: 110,
+          nodeSep: 48,
           defaultWidth: NODE_WIDTH,
           defaultHeight: NODE_HEIGHT,
-        },
+        }
       ),
-    [departments, edges],
+    [visibleDepartments, edges]
   );
 
   const ownDepartmentIds = useMemo(() => {
@@ -545,52 +578,57 @@ function OrganizationCanvasInner({
     return new Set(
       memberships
         .filter((membership) => membership.user_id === currentUserId)
-        .map((membership) => membership.department_id),
+        .map((membership) => membership.department_id)
     );
   }, [memberships, currentUserId]);
 
   const baseNodes = useMemo<OrgNodeType[]>(() => {
-    const departmentNodes: DepartmentNodeType[] = visibleDepartments.map((department) => {
-      const stored = { x: department.position_x, y: department.position_y };
-      const fallback =
-        stored.x === 0 && stored.y === 0
-          ? (layout.get(department.id) ?? { x: 0, y: 0 })
-          : stored;
-      const position = levelMode
-        ? (layout.get(department.id) ?? fallback)
-        : fallback;
-      const members = membersByDepartment.get(department.id) ?? [];
-      const manager = members.find((m) => m.role === 'manager');
-      const managerPerson = manager ? people.get(manager.user_id) : null;
-      return {
-        id: department.id,
-        type: 'department',
-        position,
-        data: {
-          department,
-          members,
-          people,
-          childCount: childCountByDepartment.get(department.id) ?? 0,
-          managerName:
-            managerPerson?.full_name ||
-            managerPerson?.email ||
-            manager?.user_id ||
-            null,
-          pendingInvites: invitationsByDepartment.get(department.id)?.length ?? 0,
-          canEdit,
-          collapsed: collapsed.has(department.id),
-          isOwnDepartment: ownDepartmentIds.has(department.id),
-          onToggle: (target: Department) => toggleCollapsed(target.id),
-          onAddChild,
-          onEdit,
-          onDelete,
-          onAddMember,
-          onInvite,
-        },
-      };
-    });
+    const departmentNodes: DepartmentNodeType[] = visibleDepartments.map(
+      (department) => {
+        const stored = { x: department.position_x, y: department.position_y };
+        const fallback =
+          stored.x === 0 && stored.y === 0
+            ? (layout.get(department.id) ?? { x: 0, y: 0 })
+            : stored;
+        const position = levelMode
+          ? (layout.get(department.id) ?? fallback)
+          : (freePositions.get(department.id) ?? fallback);
+        const members = membersByDepartment.get(department.id) ?? [];
+        const manager = members.find((m) => m.role === 'manager');
+        const managerPerson = manager ? people.get(manager.user_id) : null;
+        return {
+          id: department.id,
+          type: 'department',
+          position,
+          data: {
+            department,
+            members,
+            people,
+            childCount: childCountByDepartment.get(department.id) ?? 0,
+            managerName:
+              managerPerson?.full_name ||
+              managerPerson?.email ||
+              manager?.user_id ||
+              null,
+            pendingInvites:
+              invitationsByDepartment.get(department.id)?.length ?? 0,
+            canEdit,
+            collapsed: collapsed.has(department.id),
+            isOwnDepartment: ownDepartmentIds.has(department.id),
+            onToggle: (target: Department) => toggleCollapsed(target.id),
+            onAddChild,
+            onEdit,
+            onDelete,
+            onAddMember,
+            onInvite,
+          },
+        };
+      }
+    );
 
-    const rootNodes = departmentNodes.filter((node) => !node.data.department.parent_id);
+    const rootNodes = departmentNodes.filter(
+      (node) => !node.data.department.parent_id
+    );
     const anchorPositions = rootNodes.length
       ? rootNodes.map((node) => node.position)
       : departments
@@ -607,7 +645,13 @@ function OrganizationCanvasInner({
       id: '__company__',
       type: 'company',
       draggable: false,
-      position: { x: anchorX + (NODE_WIDTH - 280) / 2, y: anchorY - 190 },
+      position:
+        levelMode && layout.get('__company__')
+          ? layout.get('__company__')!
+          : (freePositions.get('__company__') ?? {
+              x: anchorX + (NODE_WIDTH - COMPANY_WIDTH) / 2,
+              y: anchorY - COMPANY_HEIGHT - 110,
+            }),
       data: {
         name: accountName,
         totalMembers,
@@ -645,9 +689,11 @@ function OrganizationCanvasInner({
     companyCollapsed,
     onAddRoot,
     onInviteCompany,
+    freePositions,
   ]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<OrgNodeType>(baseNodes);
+  const [nodes, setNodes, onNodesChange] =
+    useNodesState<OrgNodeType>(baseNodes);
 
   // Sync prop-derived nodes into React Flow only when the source data
   // changes. During a drag the base array is stable, so this must not
@@ -656,9 +702,26 @@ function OrganizationCanvasInner({
     setNodes(baseNodes);
   }, [baseNodes, setNodes]);
 
+  const capturePositions = () =>
+    new Map(nodes.map((node) => [node.id, node.position]));
+
+  const toggleLevels = () => {
+    if (levelMode) {
+      setFreePositions(capturePositions());
+      setLevelMode(false);
+    } else {
+      setLevelMode(true);
+    }
+  };
+
   if (departments.length === 0) {
     return (
-      <div className="flex h-[620px] w-full flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card text-sm text-muted-foreground">
+      <div
+        className={cn(
+          'border-border bg-card text-muted-foreground flex h-[620px] w-full flex-col items-center justify-center gap-3 rounded-2xl border text-sm',
+          className
+        )}
+      >
         <p>{t('emptyTitle')}</p>
         <p className="max-w-sm text-center text-xs">{t('emptyCanvasDesc')}</p>
         {canEdit && (
@@ -672,7 +735,12 @@ function OrganizationCanvasInner({
   }
 
   return (
-    <div className="h-[620px] w-full overflow-hidden rounded-xl border border-border bg-background">
+    <div
+      className={cn(
+        'bg-muted/10 border-border h-[620px] w-full overflow-hidden rounded-2xl border',
+        className
+      )}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -681,10 +749,15 @@ function OrganizationCanvasInner({
         onNodesChange={onNodesChange}
         onNodeDragStop={(_, node) => {
           if (node.id === '__company__') return;
-          setLevelMode(false);
-          setNodes((prev) =>
-            prev.map((n) => (n.id === node.id ? { ...n, position: node.position } : n)),
+          setFreePositions(
+            new Map(
+              nodes.map((current) => [
+                current.id,
+                current.id === node.id ? node.position : current.position,
+              ])
+            )
           );
+          setLevelMode(false);
           onPositionChange(node.id, node.position.x, node.position.y);
         }}
         onNodeDoubleClick={(_, node) => {
@@ -692,7 +765,7 @@ function OrganizationCanvasInner({
           if (department) onEdit(department);
         }}
         fitView
-        fitViewOptions={{ padding: 0.15, minZoom: 0.78, maxZoom: 1 }}
+        fitViewOptions={{ padding: 0.15, minZoom: fitMinZoom, maxZoom: 1 }}
         minZoom={0.2}
         maxZoom={1.5}
         proOptions={{ hideAttribution: true }}
@@ -719,8 +792,27 @@ function OrganizationCanvasInner({
           maskColor="color-mix(in oklch, var(--background) 70%, transparent)"
           className="!border-border !bg-card !rounded-xl !border !shadow-[0_6px_20px_-8px_rgba(0,0,0,0.5)]"
         />
+        <Panel
+          position="top-right"
+          className="!top-4 !right-4 hidden items-center gap-2 sm:flex"
+        >
+          <span className="border-border bg-card text-muted-foreground inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] shadow-sm">
+            <Building2 className="text-primary h-3.5 w-3.5" />
+            <strong className="text-foreground tabular-nums">
+              {departments.length}
+            </strong>
+            {t('departmentsStat')}
+          </span>
+          <span className="border-border bg-card text-muted-foreground inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] shadow-sm">
+            <UsersRound className="text-primary h-3.5 w-3.5" />
+            <strong className="text-foreground tabular-nums">
+              {accountMembers.length}
+            </strong>
+            {t('employees')}
+          </span>
+        </Panel>
         <Panel position="top-left" className="!top-4 !left-4">
-          {canEdit && (
+          {canEdit && showAddButton && (
             <button
               type="button"
               onClick={onAddRoot}
@@ -732,12 +824,12 @@ function OrganizationCanvasInner({
           )}
           <button
             type="button"
-            onClick={() => setLevelMode((v) => !v)}
+            onClick={toggleLevels}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium shadow-[0_6px_20px_-8px_rgba(0,0,0,0.5)] transition-colors',
               levelMode
                 ? 'border-primary/40 bg-primary/10 text-primary'
-                : 'border-border bg-card text-muted-foreground hover:text-foreground',
+                : 'border-border bg-card text-muted-foreground hover:text-foreground'
             )}
           >
             <Rows3 className="h-4 w-4" />

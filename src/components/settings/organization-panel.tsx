@@ -1,6 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { useCan } from '@/hooks/use-can';
@@ -23,6 +29,7 @@ import {
   LayoutList,
   Loader2,
   MailPlus,
+  Maximize2,
   Network,
   Pencil,
   Plus,
@@ -31,12 +38,14 @@ import {
   User,
   UserPlus,
   Users,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -52,6 +61,7 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { OrganizationCanvas } from './organization-canvas';
+import { OrganizationDirectory } from './organization-directory';
 import { InviteMemberDialog } from './invite-member-dialog';
 
 const ROLE_ICON: Record<DepartmentRole, typeof Crown> = {
@@ -80,7 +90,17 @@ const EMPTY_DRAFT: DepartmentDraft = {
   color: '#6366f1',
 };
 
-export function OrganizationPanel() {
+interface OrganizationPanelProps {
+  /** Render only the fullscreen structure dialog (Settings entry). */
+  fullscreenOnly?: boolean;
+  /** Called when the standalone dialog closes (Settings entry). */
+  onClose?: () => void;
+}
+
+export function OrganizationPanel({
+  fullscreenOnly = false,
+  onClose,
+}: OrganizationPanelProps) {
   const t = useTranslations('Settings.organization');
   const tRoles = useTranslations('Settings.organization.roles');
   const { accountId, account, user, refreshProfile } = useAuth();
@@ -96,6 +116,7 @@ export function OrganizationPanel() {
   const [savingCompany, setSavingCompany] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [view, setView] = useState<'canvas' | 'list'>('canvas');
+  const [structureOpen, setStructureOpen] = useState(fullscreenOnly);
 
   const [deptDialogOpen, setDeptDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Department | null>(null);
@@ -103,13 +124,17 @@ export function OrganizationPanel() {
   const [savingDept, setSavingDept] = useState(false);
 
   const [memberDialogOpen, setMemberDialogOpen] = useState(false);
-  const [memberDepartment, setMemberDepartment] = useState<Department | null>(null);
+  const [memberDepartment, setMemberDepartment] = useState<Department | null>(
+    null
+  );
   const [selectedUserId, setSelectedUserId] = useState('');
   const [selectedRole, setSelectedRole] = useState<DepartmentRole>('agent');
   const [savingMember, setSavingMember] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
-  const [inviteDepartment, setInviteDepartment] = useState<Department | null>(null);
+  const [inviteDepartment, setInviteDepartment] = useState<Department | null>(
+    null
+  );
   const [companyInviteOpen, setCompanyInviteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -153,6 +178,10 @@ export function OrganizationPanel() {
   useEffect(() => {
     if (account?.name) setCompanyName(account.name);
   }, [account?.name]);
+
+  useEffect(() => {
+    if (fullscreenOnly && !loading) setStructureOpen(true);
+  }, [fullscreenOnly, loading]);
 
   const peopleById = useMemo(() => {
     const map = new Map<string, AccountMember>();
@@ -206,20 +235,17 @@ export function OrganizationPanel() {
   const roots = childrenByParent.get(null) ?? [];
   const assignedUserIds = useMemo(
     () => new Set(memberships.map((m) => m.user_id)),
-    [memberships],
+    [memberships]
   );
 
-  const openCreate = useCallback(
-    (parent: Department | null) => {
-      setEditing(null);
-      setDraft({
-        ...EMPTY_DRAFT,
-        parent_id: parent?.id ?? null,
-      });
-      setDeptDialogOpen(true);
-    },
-    [],
-  );
+  const openCreate = useCallback((parent: Department | null) => {
+    setEditing(null);
+    setDraft({
+      ...EMPTY_DRAFT,
+      parent_id: parent?.id ?? null,
+    });
+    setDeptDialogOpen(true);
+  }, []);
 
   const openEdit = useCallback((department: Department) => {
     setEditing(department);
@@ -290,15 +316,21 @@ export function OrganizationPanel() {
     }
   }, [deleteTarget, fetchData, supabase, t]);
 
-  const openAddMember = useCallback((department: Department) => {
-    const firstAvailable = accountMembers.find(
-      (m) => !memberships.some((x) => x.department_id === department.id && x.user_id === m.user_id),
-    );
-    setMemberDepartment(department);
-    setSelectedUserId(firstAvailable?.user_id ?? '__none__');
-    setSelectedRole('agent');
-    setMemberDialogOpen(true);
-  }, [accountMembers, memberships]);
+  const openAddMember = useCallback(
+    (department: Department) => {
+      const firstAvailable = accountMembers.find(
+        (m) =>
+          !memberships.some(
+            (x) => x.department_id === department.id && x.user_id === m.user_id
+          )
+      );
+      setMemberDepartment(department);
+      setSelectedUserId(firstAvailable?.user_id ?? '__none__');
+      setSelectedRole('agent');
+      setMemberDialogOpen(true);
+    },
+    [accountMembers, memberships]
+  );
 
   const addMember = useCallback(async () => {
     if (
@@ -325,7 +357,15 @@ export function OrganizationPanel() {
     } finally {
       setSavingMember(false);
     }
-  }, [accountId, fetchData, memberDepartment, selectedRole, selectedUserId, supabase, t]);
+  }, [
+    accountId,
+    fetchData,
+    memberDepartment,
+    selectedRole,
+    selectedUserId,
+    supabase,
+    t,
+  ]);
 
   const updateMemberRole = useCallback(
     async (membershipId: string, role: DepartmentRole) => {
@@ -338,11 +378,11 @@ export function OrganizationPanel() {
         return;
       }
       setMemberships((prev) =>
-        prev.map((m) => (m.id === membershipId ? { ...m, role } : m)),
+        prev.map((m) => (m.id === membershipId ? { ...m, role } : m))
       );
       toast.success(t('roleUpdated'));
     },
-    [supabase, t],
+    [supabase, t]
   );
 
   const removeMember = useCallback(
@@ -358,7 +398,7 @@ export function OrganizationPanel() {
       setMemberships((prev) => prev.filter((m) => m.id !== membershipId));
       toast.success(t('memberRemoved'));
     },
-    [supabase, t],
+    [supabase, t]
   );
 
   const savePosition = useCallback(
@@ -366,9 +406,7 @@ export function OrganizationPanel() {
       const position_x = Math.round(x);
       const position_y = Math.round(y);
       setDepartments((prev) =>
-        prev.map((d) =>
-          d.id === id ? { ...d, position_x, position_y } : d,
-        ),
+        prev.map((d) => (d.id === id ? { ...d, position_x, position_y } : d))
       );
       void supabase
         .from('departments')
@@ -378,7 +416,7 @@ export function OrganizationPanel() {
           if (error) toast.error(error.message);
         });
     },
-    [supabase],
+    [supabase]
   );
 
   const toggleExpanded = useCallback((id: string) => {
@@ -391,9 +429,14 @@ export function OrganizationPanel() {
   }, []);
 
   const totalMembers = assignedUserIds.size;
-  const unassigned = accountMembers.filter((m) => !assignedUserIds.has(m.user_id));
+  const unassigned = accountMembers.filter(
+    (m) => !assignedUserIds.has(m.user_id)
+  );
 
-  const renderDepartment = (department: Department, depth: number): ReactNode => {
+  const renderDepartment = (
+    department: Department,
+    depth: number
+  ): ReactNode => {
     const children = childrenByParent.get(department.id) ?? [];
     const members = membersByDepartment.get(department.id) ?? [];
     const pendingInvites = invitesByDepartment.get(department.id) ?? [];
@@ -409,34 +452,42 @@ export function OrganizationPanel() {
         <div className="flex items-start gap-3">
           <div className="flex flex-col items-center pt-4">
             <span
-              className="h-3 w-3 rounded-full ring-4 ring-card"
+              className="ring-card h-3 w-3 rounded-full ring-4"
               style={{ backgroundColor: department.color }}
             />
-            {children.length > 0 && <span className="mt-1 w-px flex-1 bg-border" />}
+            {children.length > 0 && (
+              <span className="bg-border mt-1 w-px flex-1" />
+            )}
           </div>
 
-          <div className="mb-3 min-w-0 flex-1 rounded-xl border border-border bg-card shadow-sm">
-            <div className="flex items-start gap-2 border-b border-border px-3 py-2.5">
+          <div className="border-border bg-card mb-3 min-w-0 flex-1 rounded-xl border shadow-sm">
+            <div className="border-border flex items-start gap-2 border-b px-3 py-2.5">
               <button
                 type="button"
                 onClick={() => toggleExpanded(department.id)}
-                className="mt-0.5 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="text-muted-foreground hover:bg-muted hover:text-foreground mt-0.5 rounded p-0.5"
                 aria-label={isOpen ? t('collapse') : t('expand')}
               >
                 {children.length > 0 ? (
-                  isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
+                  isOpen ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )
                 ) : (
                   <span className="block h-4 w-4" />
                 )}
               </button>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-foreground">
+                <p className="text-foreground truncate text-sm font-semibold">
                   {department.name}
                 </p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                <p className="text-muted-foreground mt-0.5 text-[11px]">
                   {t('membersCount', { count: members.length })} ·{' '}
                   {t('subdepartmentsCount', { count: children.length })}
-                  {managerName ? ` · ${t('managerLabel', { name: managerName })}` : ''}
+                  {managerName
+                    ? ` · ${t('managerLabel', { name: managerName })}`
+                    : ''}
                 </p>
               </div>
               {canEdit && (
@@ -444,7 +495,7 @@ export function OrganizationPanel() {
                   <button
                     type="button"
                     onClick={() => openCreate(department)}
-                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="text-muted-foreground hover:bg-muted hover:text-foreground rounded p-1"
                     title={t('addSubdepartment')}
                   >
                     <Plus className="h-3.5 w-3.5" />
@@ -452,7 +503,7 @@ export function OrganizationPanel() {
                   <button
                     type="button"
                     onClick={() => openEdit(department)}
-                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="text-muted-foreground hover:bg-muted hover:text-foreground rounded p-1"
                     title={t('edit')}
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -460,7 +511,7 @@ export function OrganizationPanel() {
                   <button
                     type="button"
                     onClick={() => setDeleteTarget(department)}
-                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                    className="text-muted-foreground hover:bg-muted hover:text-destructive rounded p-1"
                     title={t('delete')}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -472,7 +523,9 @@ export function OrganizationPanel() {
             {isOpen && (
               <div className="space-y-1.5 px-3 py-2.5">
                 {members.length === 0 ? (
-                  <p className="text-[11px] text-muted-foreground">{t('noMembers')}</p>
+                  <p className="text-muted-foreground text-[11px]">
+                    {t('noMembers')}
+                  </p>
                 ) : (
                   members.map((membership) => {
                     const person = peopleById.get(membership.user_id);
@@ -480,14 +533,14 @@ export function OrganizationPanel() {
                     return (
                       <div
                         key={membership.id}
-                        className="flex items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5"
+                        className="bg-muted/40 flex items-center gap-2 rounded-lg px-2 py-1.5"
                       >
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold">
+                        <span className="bg-muted flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold">
                           {(person?.full_name || person?.email || 'U')
                             .charAt(0)
                             .toUpperCase()}
                         </span>
-                        <span className="min-w-0 flex-1 truncate text-xs text-foreground">
+                        <span className="text-foreground min-w-0 flex-1 truncate text-xs">
                           {person ? memberLabel(person) : membership.user_id}
                         </span>
                         {canEdit ? (
@@ -496,14 +549,14 @@ export function OrganizationPanel() {
                             onValueChange={(v) =>
                               void updateMemberRole(
                                 membership.id,
-                                v as DepartmentRole,
+                                v as DepartmentRole
                               )
                             }
                           >
                             <SelectTrigger
                               className={cn(
                                 'h-6 w-auto gap-1 rounded-full border px-2 text-[10px]',
-                                ROLE_STYLE[membership.role],
+                                ROLE_STYLE[membership.role]
                               )}
                             >
                               <SelectValue>
@@ -519,7 +572,7 @@ export function OrganizationPanel() {
                                   <SelectItem key={role} value={role}>
                                     {tRoles(role)}
                                   </SelectItem>
-                                ),
+                                )
                               )}
                             </SelectContent>
                           </Select>
@@ -527,7 +580,7 @@ export function OrganizationPanel() {
                           <span
                             className={cn(
                               'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px]',
-                              ROLE_STYLE[membership.role],
+                              ROLE_STYLE[membership.role]
                             )}
                           >
                             <RoleIcon className="h-3 w-3" />
@@ -538,7 +591,7 @@ export function OrganizationPanel() {
                           <button
                             type="button"
                             onClick={() => void removeMember(membership.id)}
-                            className="rounded p-0.5 text-muted-foreground hover:text-destructive"
+                            className="text-muted-foreground hover:text-destructive rounded p-0.5"
                             title={t('removeMember')}
                           >
                             <Trash2 className="h-3 w-3" />
@@ -549,14 +602,16 @@ export function OrganizationPanel() {
                   })
                 )}
                 {pendingInvites.length > 0 && (
-                  <div className="space-y-1 rounded-lg border border-dashed border-border px-2 py-1.5">
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                      {t('pendingInvitesCount', { count: pendingInvites.length })}
+                  <div className="border-border space-y-1 rounded-lg border border-dashed px-2 py-1.5">
+                    <p className="text-muted-foreground text-[10px] font-medium tracking-wider uppercase">
+                      {t('pendingInvitesCount', {
+                        count: pendingInvites.length,
+                      })}
                     </p>
                     {pendingInvites.map((invitation) => (
                       <p
                         key={invitation.id}
-                        className="truncate text-[11px] text-muted-foreground"
+                        className="text-muted-foreground truncate text-[11px]"
                       >
                         {invitation.label || t('pendingInvite')} ·{' '}
                         {tRoles(invitation.department_role ?? 'agent')}
@@ -569,7 +624,7 @@ export function OrganizationPanel() {
                     <button
                       type="button"
                       onClick={() => openAddMember(department)}
-                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-primary hover:bg-primary/5"
+                      className="text-primary hover:bg-primary/5 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px]"
                     >
                       <UserPlus className="h-3 w-3" />
                       {t('addMember')}
@@ -577,7 +632,7 @@ export function OrganizationPanel() {
                     <button
                       type="button"
                       onClick={() => setInviteDepartment(department)}
-                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-primary hover:bg-primary/5"
+                      className="text-primary hover:bg-primary/5 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px]"
                     >
                       <MailPlus className="h-3 w-3" />
                       {t('invite')}
@@ -601,197 +656,227 @@ export function OrganizationPanel() {
   const allMembersOptions = accountMembers.filter(
     (m) =>
       !memberships.some(
-        (x) => x.department_id === memberDepartment?.id && x.user_id === m.user_id,
-      ),
+        (x) =>
+          x.department_id === memberDepartment?.id && x.user_id === m.user_id
+      )
   );
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">{t('title')}</h2>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            {t('description')}
-          </p>
-        </div>
-        {canEdit && (
-          <Button onClick={() => openCreate(null)} className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            {t('addDepartment')}
-          </Button>
-        )}
-      </div>
-
-      {canEdit && (
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="min-w-0 flex-1">
-              <Label htmlFor="company-name">{t('companyNameLabel')}</Label>
-              <Input
-                id="company-name"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                className="mt-1.5 bg-muted text-foreground"
-              />
-              <p className="mt-1.5 text-[11px] text-muted-foreground">
-                {t('companyNameHint')}
+      {fullscreenOnly ? null : (
+        <>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-foreground text-lg font-semibold">
+                {t('title')}
+              </h2>
+              <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
+                {t('description')}
               </p>
             </div>
-            <Button
-              type="button"
-              disabled={
-                savingCompany ||
-                !accountId ||
-                !companyName.trim() ||
-                companyName.trim() === (account?.name ?? '')
-              }
-              onClick={async () => {
-                if (!accountId) return;
-                setSavingCompany(true);
-                try {
-                  const { error } = await supabase
-                    .from('accounts')
-                    .update({ name: companyName.trim() })
-                    .eq('id', accountId);
-                  if (error) throw error;
-                  await refreshProfile();
-                  toast.success(t('companyUpdated'));
-                } catch (err) {
-                  toast.error(
-                    err instanceof Error ? err.message : t('saveFailed'),
-                  );
-                } finally {
-                  setSavingCompany(false);
-                }
-              }}
-            >
-              {savingCompany ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : null}
-              {t('saveCompany')}
-            </Button>
+            {canEdit && (
+              <Button onClick={() => openCreate(null)} className="gap-1.5">
+                <Plus className="h-4 w-4" />
+                {t('addDepartment')}
+              </Button>
+            )}
           </div>
-        </div>
-      )}
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Stat label={t('departmentsStat')} value={departments.length} icon={Building2} />
-        <Stat label={t('assignedStat')} value={totalMembers} icon={Users} />
-        <Stat label={t('unassignedStat')} value={unassigned.length} icon={User} />
-      </div>
-
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center rounded-lg border border-border bg-card p-0.5">
-          <button
-            type="button"
-            onClick={() => setView('canvas')}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
-              view === 'canvas'
-                ? 'bg-primary/10 text-primary'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <Network className="h-3.5 w-3.5" />
-            {t('canvasView')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setView('list')}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
-              view === 'list'
-                ? 'bg-primary/10 text-primary'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <LayoutList className="h-3.5 w-3.5" />
-            {t('listView')}
-          </button>
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center rounded-xl border border-border py-16">
-          <Loader2 className="h-5 w-5 animate-spin text-primary" />
-        </div>
-      ) : view === 'canvas' ? (
-        <OrganizationCanvas
-          accountName={account?.name ?? t('companyRoot')}
-          totalMembers={accountMembers.length}
-          onInviteCompany={() => setCompanyInviteOpen(true)}
-          currentUserId={user?.id ?? null}
-          departments={departments}
-          memberships={memberships}
-          accountMembers={accountMembers}
-          canEdit={canEdit}
-          onAddChild={openCreate}
-          onAddRoot={() => openCreate(null)}
-          onEdit={openEdit}
-          onDelete={setDeleteTarget}
-          onAddMember={openAddMember}
-          onInvite={setInviteDepartment}
-          invitationsByDepartment={invitesByDepartment}
-          onPositionChange={savePosition}
-        />
-      ) : roots.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16 text-center">
-          <Building2 className="h-10 w-10 text-muted-foreground/50" />
-          <p className="mt-3 text-sm font-medium text-foreground">
-            {t('emptyTitle')}
-          </p>
-          <p className="mt-1 max-w-sm text-xs text-muted-foreground">
-            {t('emptyDesc')}
-          </p>
           {canEdit && (
-            <Button onClick={() => openCreate(null)} className="mt-4 gap-1.5">
-              <Plus className="h-4 w-4" />
-              {t('addDepartment')}
-            </Button>
+            <div className="border-border bg-card rounded-xl border p-4">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="min-w-0 flex-1">
+                  <Label htmlFor="company-name">{t('companyNameLabel')}</Label>
+                  <Input
+                    id="company-name"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    className="bg-muted text-foreground mt-1.5"
+                  />
+                  <p className="text-muted-foreground mt-1.5 text-[11px]">
+                    {t('companyNameHint')}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  disabled={
+                    savingCompany ||
+                    !accountId ||
+                    !companyName.trim() ||
+                    companyName.trim() === (account?.name ?? '')
+                  }
+                  onClick={async () => {
+                    if (!accountId) return;
+                    setSavingCompany(true);
+                    try {
+                      const { error } = await supabase
+                        .from('accounts')
+                        .update({ name: companyName.trim() })
+                        .eq('id', accountId);
+                      if (error) throw error;
+                      await refreshProfile();
+                      toast.success(t('companyUpdated'));
+                    } catch (err) {
+                      toast.error(
+                        err instanceof Error ? err.message : t('saveFailed')
+                      );
+                    } finally {
+                      setSavingCompany(false);
+                    }
+                  }}
+                >
+                  {savingCompany ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : null}
+                  {t('saveCompany')}
+                </Button>
+              </div>
+            </div>
           )}
-        </div>
-      ) : (
-        <div className="rounded-xl border border-border bg-muted/20 p-3">
-          <div className="mb-3 flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
-            <Building2 className="h-4 w-4 text-primary" />
-            <span className="text-sm font-semibold text-foreground">
-              {t('companyRoot')}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {t('departmentsStat')}: {departments.length}
-            </span>
-          </div>
-          <div className="space-y-1">
-            {roots.map((department) => renderDepartment(department, 0))}
-          </div>
-        </div>
-      )}
 
-      {unassigned.length > 0 && (
-        <div className="rounded-xl border border-border bg-card p-3">
-          <div className="flex items-center gap-2">
-            <UserPlus className="h-4 w-4 text-muted-foreground" />
-            <p className="text-sm font-medium text-foreground">
-              {t('unassignedTitle')}
-            </p>
-            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-              {unassigned.length}
-            </span>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Stat
+              label={t('departmentsStat')}
+              value={departments.length}
+              icon={Building2}
+            />
+            <Stat label={t('assignedStat')} value={totalMembers} icon={Users} />
+            <Stat
+              label={t('unassignedStat')}
+              value={unassigned.length}
+              icon={User}
+            />
           </div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {unassigned.map((member) => (
-              <span
-                key={member.user_id}
-                className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+
+          <div className="flex items-center justify-between gap-2">
+            <div className="border-border bg-card flex items-center rounded-lg border p-0.5">
+              <button
+                type="button"
+                onClick={() => setView('canvas')}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+                  view === 'canvas'
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
               >
-                {memberLabel(member)}
-              </span>
-            ))}
+                <Network className="h-3.5 w-3.5" />
+                {t('canvasView')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('list')}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+                  view === 'list'
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <LayoutList className="h-3.5 w-3.5" />
+                {t('listView')}
+              </button>
+            </div>
+            {view === 'canvas' && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setStructureOpen(true)}
+                className="gap-1.5"
+              >
+                <Maximize2 className="h-3.5 w-3.5" />
+                {t('fullscreen')}
+              </Button>
+            )}
           </div>
-        </div>
-      )}
 
-      {/* Create/edit department */}
+          {loading ? (
+            <div className="border-border flex items-center justify-center rounded-xl border py-16">
+              <Loader2 className="text-primary h-5 w-5 animate-spin" />
+            </div>
+          ) : view === 'canvas' ? (
+            <OrganizationCanvas
+              accountName={account?.name ?? t('companyRoot')}
+              totalMembers={accountMembers.length}
+              onInviteCompany={() => setCompanyInviteOpen(true)}
+              currentUserId={user?.id ?? null}
+              departments={departments}
+              memberships={memberships}
+              accountMembers={accountMembers}
+              canEdit={canEdit}
+              onAddChild={openCreate}
+              onAddRoot={() => openCreate(null)}
+              onEdit={openEdit}
+              onDelete={setDeleteTarget}
+              onAddMember={openAddMember}
+              onInvite={setInviteDepartment}
+              invitationsByDepartment={invitesByDepartment}
+              onPositionChange={savePosition}
+            />
+          ) : roots.length === 0 ? (
+            <div className="border-border flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
+              <Building2 className="text-muted-foreground/50 h-10 w-10" />
+              <p className="text-foreground mt-3 text-sm font-medium">
+                {t('emptyTitle')}
+              </p>
+              <p className="text-muted-foreground mt-1 max-w-sm text-xs">
+                {t('emptyDesc')}
+              </p>
+              {canEdit && (
+                <Button
+                  onClick={() => openCreate(null)}
+                  className="mt-4 gap-1.5"
+                >
+                  <Plus className="h-4 w-4" />
+                  {t('addDepartment')}
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="border-border bg-muted/20 rounded-xl border p-3">
+              <div className="border-primary/20 bg-primary/5 mb-3 flex items-center gap-2 rounded-lg border px-3 py-2">
+                <Building2 className="text-primary h-4 w-4" />
+                <span className="text-foreground text-sm font-semibold">
+                  {t('companyRoot')}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {t('departmentsStat')}: {departments.length}
+                </span>
+              </div>
+              <div className="space-y-1">
+                {roots.map((department) => renderDepartment(department, 0))}
+              </div>
+            </div>
+          )}
+
+          {unassigned.length > 0 && (
+            <div className="border-border bg-card rounded-xl border p-3">
+              <div className="flex items-center gap-2">
+                <UserPlus className="text-muted-foreground h-4 w-4" />
+                <p className="text-foreground text-sm font-medium">
+                  {t('unassignedTitle')}
+                </p>
+                <span className="bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-[10px]">
+                  {unassigned.length}
+                </span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {unassigned.map((member) => (
+                  <span
+                    key={member.user_id}
+                    className="border-border bg-muted text-muted-foreground rounded-full border px-2 py-0.5 text-[11px]"
+                  >
+                    {memberLabel(member)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Create/edit department */}
+        </>
+      )}
       <Dialog open={deptDialogOpen} onOpenChange={setDeptDialogOpen}>
         <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-md">
           <DialogHeader>
@@ -805,7 +890,9 @@ export function OrganizationPanel() {
               <Label>{t('name')}</Label>
               <Input
                 value={draft.name}
-                onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, name: e.target.value }))
+                }
                 placeholder={t('namePlaceholder')}
                 className="bg-muted border-border text-foreground"
                 autoFocus
@@ -843,13 +930,17 @@ export function OrganizationPanel() {
                 <input
                   type="color"
                   value={draft.color}
-                  onChange={(e) => setDraft((d) => ({ ...d, color: e.target.value }))}
-                  className="h-8 w-10 cursor-pointer rounded border border-border bg-muted"
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, color: e.target.value }))
+                  }
+                  className="border-border bg-muted h-8 w-10 cursor-pointer rounded border"
                 />
                 <Input
                   value={draft.color}
-                  onChange={(e) => setDraft((d) => ({ ...d, color: e.target.value }))}
-                  className="bg-muted border-border font-mono text-foreground"
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, color: e.target.value }))
+                  }
+                  className="bg-muted border-border text-foreground font-mono"
                 />
               </div>
             </div>
@@ -863,7 +954,9 @@ export function OrganizationPanel() {
               {t('cancel')}
             </Button>
             <Button onClick={() => void saveDepartment()} disabled={savingDept}>
-              {savingDept && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              {savingDept && (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              )}
               {editing ? t('save') : t('create')}
             </Button>
           </DialogFooter>
@@ -940,7 +1033,9 @@ export function OrganizationPanel() {
                 allMembersOptions.length === 0
               }
             >
-              {savingMember && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              {savingMember && (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              )}
               {t('addMember')}
             </Button>
           </DialogFooter>
@@ -961,7 +1056,10 @@ export function OrganizationPanel() {
       />
 
       {/* Delete department */}
-      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
         <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>{t('deleteTitle')}</DialogTitle>
@@ -988,6 +1086,200 @@ export function OrganizationPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={structureOpen}
+        onOpenChange={(open) => {
+          setStructureOpen(open);
+          if (!open && fullscreenOnly) onClose?.();
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className={cn(
+            'border-border bg-background flex flex-col gap-0 overflow-hidden p-0',
+            fullscreenOnly
+              ? 'h-[95dvh] w-[95vw] max-w-none rounded-2xl border sm:max-w-none'
+              : 'h-[92vh] w-[96vw] max-w-none rounded-2xl sm:max-w-none'
+          )}
+        >
+          <DialogTitle className="sr-only">{t('title')}</DialogTitle>
+          <div className="flex min-h-0 flex-1">
+            <div className="flex min-w-0 flex-1 flex-col">
+              <header className="border-border flex h-14 shrink-0 items-center gap-2.5 border-b px-4">
+                <span className="bg-primary/10 text-primary flex h-8 w-8 items-center justify-center rounded-lg">
+                  <Network className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-foreground truncate text-sm font-semibold">
+                    {t('title')}
+                  </p>
+                  <p className="text-muted-foreground truncate text-[11px]">
+                    {account?.name || t('companyRoot')} · {departments.length}{' '}
+                    {t('departmentsStat').toLocaleLowerCase()} ·{' '}
+                    {accountMembers.length} {t('employees').toLocaleLowerCase()}
+                  </p>
+                </div>
+                <div className="ml-auto flex items-center gap-1.5">
+                  <div className="border-border bg-muted/30 flex items-center gap-0.5 rounded-lg border p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setView('canvas')}
+                      aria-pressed={view === 'canvas'}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors',
+                        view === 'canvas'
+                          ? 'bg-background text-primary shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      <Network className="size-3.5" />
+                      <span className="hidden sm:inline">
+                        {t('canvasView')}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setView('list')}
+                      aria-pressed={view === 'list'}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors',
+                        view === 'list'
+                          ? 'bg-background text-primary shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      <LayoutList className="size-3.5" />
+                      <span className="hidden sm:inline">{t('listView')}</span>
+                    </button>
+                  </div>
+                  {canEdit && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => openCreate(null)}
+                      className="gap-1.5"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      {t('addDepartment')}
+                    </Button>
+                  )}
+                  <DialogClose
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={t('closeFullscreen')}
+                      />
+                    }
+                  >
+                    <X className="h-4 w-4" />
+                  </DialogClose>
+                </div>
+              </header>
+              <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                {loading ? (
+                  <div className="border-border flex h-full items-center justify-center rounded-xl border">
+                    <Loader2 className="text-primary h-5 w-5 animate-spin" />
+                  </div>
+                ) : view === 'canvas' ? (
+                  <OrganizationCanvas
+                    accountName={account?.name ?? t('companyRoot')}
+                    totalMembers={accountMembers.length}
+                    onInviteCompany={() => setCompanyInviteOpen(true)}
+                    currentUserId={user?.id ?? null}
+                    departments={departments}
+                    memberships={memberships}
+                    accountMembers={accountMembers}
+                    canEdit={canEdit}
+                    onAddChild={openCreate}
+                    onAddRoot={() => openCreate(null)}
+                    onEdit={openEdit}
+                    onDelete={setDeleteTarget}
+                    onAddMember={openAddMember}
+                    onInvite={setInviteDepartment}
+                    invitationsByDepartment={invitesByDepartment}
+                    onPositionChange={savePosition}
+                    className="h-full border-0"
+                    fitMinZoom={0.55}
+                    showAddButton={false}
+                  />
+                ) : roots.length === 0 ? (
+                  <div className="border-border flex h-full flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
+                    <Building2 className="text-muted-foreground/50 h-10 w-10" />
+                    <p className="text-foreground mt-3 text-sm font-medium">
+                      {t('emptyTitle')}
+                    </p>
+                    <p className="text-muted-foreground mt-1 max-w-sm text-xs">
+                      {t('emptyDesc')}
+                    </p>
+                    {canEdit && (
+                      <Button
+                        onClick={() => openCreate(null)}
+                        className="mt-4 gap-1.5"
+                      >
+                        <Plus className="h-4 w-4" />
+                        {t('addDepartment')}
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="border-border bg-muted/20 rounded-xl border p-3">
+                      <div className="border-primary/20 bg-primary/5 mb-3 flex items-center gap-2 rounded-lg border px-3 py-2">
+                        <Building2 className="text-primary h-4 w-4" />
+                        <span className="text-foreground text-sm font-semibold">
+                          {t('companyRoot')}
+                        </span>
+                        <span className="text-muted-foreground text-xs">
+                          {t('departmentsStat')}: {departments.length}
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        {roots.map((department) =>
+                          renderDepartment(department, 0)
+                        )}
+                      </div>
+                    </div>
+
+                    {unassigned.length > 0 && (
+                      <div className="border-border bg-card rounded-xl border p-3">
+                        <div className="flex items-center gap-2">
+                          <UserPlus className="text-muted-foreground h-4 w-4" />
+                          <p className="text-foreground text-sm font-medium">
+                            {t('unassignedTitle')}
+                          </p>
+                          <span className="bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-[10px]">
+                            {unassigned.length}
+                          </span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {unassigned.map((member) => (
+                            <span
+                              key={member.user_id}
+                              className="border-border bg-muted text-muted-foreground rounded-full border px-2 py-0.5 text-[11px]"
+                            >
+                              {memberLabel(member)}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+            <aside className="border-border bg-card hidden w-[340px] shrink-0 border-l lg:block">
+              <OrganizationDirectory
+                members={accountMembers}
+                departments={departments}
+                memberships={memberships}
+                pendingInvites={invitations.length}
+              />
+            </aside>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1002,12 +1294,12 @@ function Stat({
   icon: typeof Building2;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-3">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+    <div className="border-border bg-card rounded-xl border p-3">
+      <div className="text-muted-foreground flex items-center gap-2 text-xs">
         <Icon className="h-3.5 w-3.5" />
         {label}
       </div>
-      <p className="mt-1 text-xl font-semibold text-foreground">{value}</p>
+      <p className="text-foreground mt-1 text-xl font-semibold">{value}</p>
     </div>
   );
 }

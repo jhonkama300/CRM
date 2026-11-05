@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Channel, Deal, Pipeline, PipelineStage } from "@/types";
@@ -8,14 +8,16 @@ import { PipelineBoard } from "@/components/pipelines/pipeline-board";
 import { DealForm } from "@/components/pipelines/deal-form";
 import { DealDetailSheet } from "@/components/pipelines/deal-detail-sheet";
 import { PipelineAnalytics } from "@/components/pipelines/pipeline-analytics";
+import { PipelineHealth } from "@/components/pipelines/pipeline-health";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, GitBranch, Plus } from "lucide-react";
+import { ChevronDown, GitBranch, Plus, Search, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
 import { GatedButton } from "@/components/ui/gated-button";
@@ -34,6 +36,7 @@ export default function PipelinesPage() {
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
   const [dealFormOpen, setDealFormOpen] = useState(false);
   const [detailDeal, setDetailDeal] = useState<Deal | null>(null);
@@ -216,6 +219,23 @@ export default function PipelinesPage() {
     [router, supabase, t],
   );
 
+  const filteredDeals = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase();
+    if (!query) return deals;
+    return deals.filter((deal) => {
+      const haystack = [
+        deal.title,
+        deal.contact?.name ?? "",
+        deal.contact?.phone ?? "",
+        deal.contact?.company ?? "",
+        deal.assignee?.full_name ?? "",
+      ]
+        .join(" ")
+        .toLocaleLowerCase();
+      return haystack.includes(query);
+    });
+  }, [deals, search]);
+
   const selectedPipeline = pipelines.find(
     (pipeline) => pipeline.id === selectedPipelineId,
   );
@@ -225,98 +245,147 @@ export default function PipelinesPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="h-8 w-48 animate-pulse rounded bg-muted" />
-          <div className="h-9 w-28 animate-pulse rounded-lg bg-muted" />
+      <div className="space-y-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="h-10 w-56 animate-pulse rounded-xl bg-muted" />
+          <div className="h-8 w-36 animate-pulse rounded-lg bg-muted" />
         </div>
-        <div className="flex gap-3">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-96 w-72 animate-pulse rounded-xl bg-muted/50" />
+        <div className="h-14 animate-pulse rounded-xl bg-muted/50" />
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-28 animate-pulse rounded-xl bg-muted/50" />
           ))}
+        </div>
+        <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="flex gap-3 overflow-hidden rounded-xl bg-muted/20 p-3">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div
+                key={i}
+                className="h-96 w-64 animate-pulse rounded-xl bg-muted/50"
+              />
+            ))}
+          </div>
+          <div className="hidden h-96 animate-pulse rounded-xl bg-muted/40 2xl:block" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
             <GitBranch className="h-5 w-5" />
           </span>
           <div>
-            <h1 className="text-xl font-semibold text-foreground">{t("title")}</h1>
-            <p className="mt-0.5 text-sm text-muted-foreground">{t("subtitle")}</p>
+            <h1 className="text-lg font-semibold tracking-tight text-foreground">
+              {t("title")}
+            </h1>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {t("subtitle")}
+            </p>
           </div>
         </div>
-        <GatedButton
-          canAct={canCreateDeals}
-          gateReason={tGate("reasons.createDeals")}
-          disabled={!selectedPipelineId || stages.length === 0}
-          onClick={() => handleAddDeal()}
-          className="bg-primary text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="mr-1 h-4 w-4" />
-          {t("addDeal")}
-        </GatedButton>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push("/settings?tab=pipelines")}
+            className="gap-1.5"
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+            {t("configurePipeline")}
+          </Button>
+          <GatedButton
+            canAct={canCreateDeals}
+            gateReason={tGate("reasons.createDeals")}
+            disabled={!selectedPipelineId || stages.length === 0}
+            onClick={() => handleAddDeal()}
+            size="sm"
+            className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {t("addDeal")}
+          </GatedButton>
+        </div>
       </div>
 
       {pipelines.length > 0 && (
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                {t("pipelineLabel")}
-              </p>
-              <DropdownMenu>
-                <DropdownMenuTrigger className="mt-1.5 inline-flex max-w-full items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted data-[popup-open]:bg-muted">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <GitBranch className="h-3.5 w-3.5" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate font-semibold">
-                      {selectedPipeline?.name ?? t("selectPipeline")}
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-2.5 shadow-sm">
+          <DropdownMenu>
+            <DropdownMenuTrigger className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-muted data-[popup-open]:bg-muted">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <GitBranch className="h-3 w-3" />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                  {t("pipelineLabel")}
+                </span>
+                <span className="block max-w-[180px] truncate font-semibold">
+                  {selectedPipeline?.name ?? t("selectPipeline")}
+                </span>
+              </span>
+              <ChevronDown className="ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="w-72 border-border bg-popover text-popover-foreground"
+            >
+              {pipelines.map((pipeline) => {
+                const pipelineChannel = channels.find(
+                  (channel) => channel.id === pipeline.channel_id,
+                );
+                return (
+                  <DropdownMenuItem
+                    key={pipeline.id}
+                    onClick={() => setSelectedPipelineId(pipeline.id)}
+                    className={
+                      pipeline.id === selectedPipelineId
+                        ? "text-primary"
+                        : "text-popover-foreground"
+                    }
+                  >
+                    <GitBranch className="mr-2 h-3.5 w-3.5 shrink-0" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{pipeline.name}</span>
+                      <span className="block truncate text-[10px] text-muted-foreground">
+                        {pipelineChannel?.name ?? t("allChannels")}
+                      </span>
                     </span>
-                    <span className="block truncate text-[11px] text-muted-foreground">
-                      {selectedChannel?.name ?? t("allChannels")}
-                    </span>
-                  </span>
-                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="start"
-                  className="w-72 border-border bg-popover text-popover-foreground"
-                >
-                  {pipelines.map((pipeline) => {
-                    const pipelineChannel = channels.find(
-                      (channel) => channel.id === pipeline.channel_id,
-                    );
-                    return (
-                      <DropdownMenuItem
-                        key={pipeline.id}
-                        onClick={() => setSelectedPipelineId(pipeline.id)}
-                        className={
-                          pipeline.id === selectedPipelineId
-                            ? "text-primary"
-                            : "text-popover-foreground"
-                        }
-                      >
-                        <GitBranch className="mr-2 h-3.5 w-3.5 shrink-0" />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate">{pipeline.name}</span>
-                          <span className="block truncate text-[10px] text-muted-foreground">
-                            {pipelineChannel?.name ?? t("allChannels")}
-                          </span>
-                        </span>
-                      </DropdownMenuItem>
-                    );
-                  })}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {selectedChannel && (
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ backgroundColor: selectedChannel.color }}
+              />
+              <span className="max-w-[140px] truncate">
+                {selectedChannel.name}
+              </span>
+            </span>
+          )}
+
+          <div className="relative min-w-[180px] flex-1 sm:max-w-xs">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={t("searchDeals")}
+              className="h-8 bg-background pl-8 text-xs"
+            />
           </div>
+
+          {search.trim() && (
+            <span className="text-[10px] text-muted-foreground">
+              {t("searchResults", { count: filteredDeals.length })}
+            </span>
+          )}
         </div>
       )}
 
@@ -340,15 +409,20 @@ export default function PipelinesPage() {
       ) : (
         <>
           <PipelineAnalytics deals={deals} />
-          <div className="rounded-2xl border border-border bg-card/30 p-3 sm:p-4">
-            <PipelineBoard
-              stages={stages}
-              deals={deals}
-              onDealMoved={handleDealMoved}
-              onAddDeal={handleAddDeal}
-              onEditDeal={handleOpenDeal}
-              onOpenChat={handleOpenDealChat}
-            />
+          <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_280px] xl:items-start">
+            <div className="min-w-0 rounded-xl border border-border bg-card/35 p-2.5">
+              <PipelineBoard
+                stages={stages}
+                deals={filteredDeals}
+                onDealMoved={handleDealMoved}
+                onAddDeal={handleAddDeal}
+                onEditDeal={handleOpenDeal}
+                onOpenChat={handleOpenDealChat}
+              />
+            </div>
+            <div className="2xl:sticky 2xl:top-4">
+              <PipelineHealth deals={deals} stages={stages} />
+            </div>
           </div>
         </>
       )}

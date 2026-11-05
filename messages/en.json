@@ -103,7 +103,13 @@
     "lastCheckIn": "Last check-in",
     "myHistory": "My recent shifts",
     "noSessions": "No shifts recorded yet.",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "employeesOnline": "Employees online",
+    "workingLabel": "Working",
+    "finishedLabel": "Finished",
+    "noOneOnline": "No one online",
+    "workingNowTitle": "Working now",
+    "noOneWorking": "No one is working right now"
   },
   "Sidebar": {
     "title": "Xylar",
@@ -135,7 +141,8 @@
     "menuProfile": "Profile",
     "menuSettings": "Settings",
     "menuSignOut": "Sign out",
-    "company": "Company"
+    "company": "Company",
+    "structure": "Company structure"
   },
   "CommandPalette": {
     "title": "Search",
@@ -190,7 +197,9 @@
     "defaultAvatar": "Avatar",
     "menuProfile": "Profile",
     "menuSettings": "Settings",
-    "menuSignOut": "Sign out"
+    "menuSignOut": "Sign out",
+    "company": "Company",
+    "structure": "Company structure"
   },
   "ModeToggle": {
     "switchMode": "Switch to {mode} mode"
@@ -863,7 +872,9 @@
         "email": "Email",
         "company": "Company",
         "tags": "Tags",
-        "createdAt": "Created"
+        "createdAt": "Created",
+        "handle": "Phone / username",
+        "user": "User"
       },
       "loading": "Loading contacts...",
       "noContactsMatch": "No contacts match your filters.",
@@ -1100,17 +1111,21 @@
       "allChannels": "All channels",
       "stageCount": "{count} stages",
       "dealCount": "{count} deals",
-      "toastNoConversation": "This deal has no linked conversation"
+      "toastNoConversation": "This deal has no linked conversation",
+      "configurePipeline": "Configure funnel",
+      "searchDeals": "Search deals or contacts...",
+      "searchResults": "{count, plural, one {# result} other {# results}}"
     },
     "board": {
       "dropDealHere": "Drop a deal here",
-      "addDeal": "Add Deal"
+      "addDeal": "Add deal"
     },
     "card": {
       "noContact": "No contact",
       "won": "Won",
       "lost": "Lost",
-      "openChat": "Open chat"
+      "openChat": "Open chat",
+      "stalled": "No movement"
     },
     "form": {
       "editDeal": "Edit Deal",
@@ -1205,7 +1220,15 @@
       "wonThisMonthTooltip": "Deals marked as Won since the first day of the current month.",
       "lostThisMonth": "Lost This Month",
       "lostThisMonthTooltip": "Deals marked as Lost since the first day of the current month.",
-      "howCalculated": "How {label} is calculated"
+      "howCalculated": "How {label} is calculated",
+      "openDeals": "Open deals",
+      "openDealsTooltip": "Deals that are not marked as won or lost.",
+      "ofTotal": "{count} total",
+      "thisMonth": "this month",
+      "conversionRate": "Conversion rate",
+      "conversionRateTooltip": "Won deals divided by won plus lost deals this month.",
+      "wonVsLost": "{won, plural, one {# won} other {# won}} · {lost, plural, one {# lost} other {# lost}}",
+      "noClosedDeals": "No closed deals this month"
     },
     "manage": {
       "title": "Manage funnels",
@@ -1264,6 +1287,20 @@
       "empty": "No messages in this conversation",
       "placeholder": "Write a message…",
       "send": "Send"
+    },
+    "health": {
+      "title": "Funnel health",
+      "description": "Distribution and attention points.",
+      "openDeals": "{count, plural, one {# open} other {# open}}",
+      "stageDistribution": "Stage distribution",
+      "noDeals": "No deals in this funnel yet.",
+      "stalled": "Stalled deals",
+      "stalledDesc": "{days}+ days without movement",
+      "noStalled": "Everything is moving",
+      "oldest": "Longest without movement",
+      "avgAge": "Average age",
+      "days": "{count, plural, one {# day} other {# days}}",
+      "openLabel": "Open"
     }
   },
   "Broadcasts": {
@@ -1324,7 +1361,8 @@
         "sent": "Sent",
         "delivered": "Delivered",
         "read": "Read",
-        "error": "Error"
+        "error": "Error",
+        "user": "User"
       },
       "stats": {
         "totalRecipients": "Total Recipients",
@@ -1492,7 +1530,8 @@
       "fetchRecipientsFailed": "Failed to fetch broadcast recipients",
       "apiRequestFailed": "Broadcast API request failed",
       "noPhoneOnContact": "No phone number on contact",
-      "unknownError": "Unknown error"
+      "unknownError": "Unknown error",
+      "noSendIdentity": "The contact has no phone number or WhatsApp identity"
     }
   },
   "Automations": {
@@ -2109,7 +2148,8 @@
       "fieldsCount": "{count} custom {count, plural, =1 {field} other {fields}}",
       "appearance": "{mode} mode · {theme} accent",
       "yourAccount": "Your account",
-      "loading": "Loading…"
+      "loading": "Loading…",
+      "allSections": "All sections"
     },
     "members": {
       "title": "Team members",
@@ -2222,7 +2262,8 @@
       "userCreatedDesc": "{email} was added to the team.",
       "tempPasswordLabel": "Temporary password",
       "tempPasswordHint": "Share this password through a secure channel. The user can change it after signing in.",
-      "copiedPassword": "Temporary password copied"
+      "copiedPassword": "Temporary password copied",
+      "create": "Create"
     },
     "tagsAndFields": {
       "title": "Fields & tags",
@@ -2375,7 +2416,27 @@
         "Authentication": "Authentication"
       },
       "allChannels": "All channels",
-      "templateChannel": "Channel"
+      "templateChannel": "Channel",
+      "searchPlaceholder": "Search templates...",
+      "allStatuses": "All statuses",
+      "statsTotal": "Total",
+      "statsApproved": "Approved",
+      "statsPending": "In review",
+      "statsAttention": "Needs attention",
+      "clearFilters": "Clear filters",
+      "noMatches": "No templates match these filters.",
+      "tableTemplate": "Template",
+      "tableStatus": "Status",
+      "tableCategory": "Category",
+      "tableChannel": "Channel",
+      "tableActions": "Actions",
+      "resultsCount": "Showing {shown} of {total} templates",
+      "languageSearchPlaceholder": "Search language...",
+      "languageNoResults": "No languages found.",
+      "languageUseCustom": "Use \"{code}\"",
+      "sectionBasic": "Basic information",
+      "sectionContent": "Message content",
+      "sectionButtons": "Buttons"
     },
     "roles": {
       "departmentRoleLabel": "Role in the department",
@@ -2568,7 +2629,14 @@
       "companyNameHint": "Shown as the company at the top of the organization chart.",
       "saveCompany": "Save company",
       "companyUpdated": "Company name updated",
-      "totalEmployees": "Total"
+      "totalEmployees": "Total",
+      "fullscreen": "Fullscreen",
+      "closeFullscreen": "Close fullscreen",
+      "directory": "People directory",
+      "searchPeople": "Search by name, role or department",
+      "supervisors": "Supervisors",
+      "noSupervisors": "No supervisors assigned",
+      "noPeopleMatch": "No people match your search"
     },
     "channels": {
       "title": "WhatsApp channels",
@@ -3747,6 +3815,7 @@
       "emptyDesc": "Invite your first employee or adjust the search.",
       "you": "You",
       "unnamed": "Unnamed"
-    }
+    },
+    "structureButton": "Company structure"
   }
 }

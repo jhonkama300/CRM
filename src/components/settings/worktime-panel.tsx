@@ -49,14 +49,6 @@ export function WorkTimePanel() {
   const [sessions, setSessions] = useState<WorkSession[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
-  const [schedule, setSchedule] = useState({
-    workday_start: '',
-    workday_end: '',
-    break_start: '',
-    break_end: '',
-  });
-  const [scheduleDirty, setScheduleDirty] = useState(false);
-  const [savingSchedule, setSavingSchedule] = useState(false);
   const isAdmin = canManageMembers;
 
   const load = useCallback(async () => {
@@ -108,40 +100,21 @@ export function WorkTimePanel() {
     };
   }, [load]);
 
-  useEffect(() => {
-    if (!accountId) return;
-    const supabase = createClient();
-    void supabase
-      .from('accounts')
-      .select('workday_start, workday_end, break_start, break_end')
-      .eq('id', accountId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!data) return;
-        setSchedule({
-          workday_start: (data.workday_start as string | null)?.slice(0, 5) ?? '',
-          workday_end: (data.workday_end as string | null)?.slice(0, 5) ?? '',
-          break_start: (data.break_start as string | null)?.slice(0, 5) ?? '',
-          break_end: (data.break_end as string | null)?.slice(0, 5) ?? '',
-        });
-      });
-  }, [accountId]);
-
   const now = work.now;
   const dayStart = startOfLocalDay(new Date(now));
   const weekStart = startOfLocalWeek(new Date(now));
 
   const ownSessions = useMemo(
     () => sessions.filter((s) => s.user_id === user?.id),
-    [sessions, user?.id],
+    [sessions, user?.id]
   );
   const ownToday = ownSessions.reduce(
     (sum, s) => sum + overlapSeconds(s, dayStart, now),
-    0,
+    0
   );
   const ownWeek = ownSessions.reduce(
     (sum, s) => sum + overlapSeconds(s, weekStart, now),
-    0,
+    0
   );
 
   const teamRows = (() => {
@@ -151,8 +124,9 @@ export function WorkTimePanel() {
         const rows = sessions.filter((s) => s.user_id === member.user_id);
         const active = rows.find((s) => !s.ended_at) ?? null;
         const last = rows.reduce<string | null>(
-          (latest, s) => (!latest || s.started_at > latest ? s.started_at : latest),
-          null,
+          (latest, s) =>
+            !latest || s.started_at > latest ? s.started_at : latest,
+          null
         );
         return {
           member,
@@ -160,21 +134,19 @@ export function WorkTimePanel() {
           last,
           today: rows.reduce(
             (sum, s) => sum + overlapSeconds(s, dayStart, now),
-            0,
+            0
           ),
           week: rows.reduce(
             (sum, s) => sum + overlapSeconds(s, weekStart, now),
-            0,
+            0
           ),
         };
       })
       .sort((a, b) => {
         if (!!a.active !== !!b.active) return a.active ? -1 : 1;
-        return (
-          a.member.full_name ??
-          a.member.email ??
-          ''
-        ).localeCompare(b.member.full_name ?? b.member.email ?? '');
+        return (a.member.full_name ?? a.member.email ?? '').localeCompare(
+          b.member.full_name ?? b.member.email ?? ''
+        );
       });
   })();
 
@@ -193,33 +165,7 @@ export function WorkTimePanel() {
     }
   };
 
-  const saveSchedule = async () => {
-    if (!accountId) return;
-    setSavingSchedule(true);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from('accounts')
-      .update({
-        workday_start: schedule.workday_start || null,
-        workday_end: schedule.workday_end || null,
-        break_start: schedule.break_start || null,
-        break_end: schedule.break_end || null,
-      })
-      .eq('id', accountId);
-    setSavingSchedule(false);
-    if (error) {
-      toast.error(t('scheduleFailed'));
-      return;
-    }
-    setScheduleDirty(false);
-    await work.refresh();
-    window.dispatchEvent(new Event('wacrm:work-updated'));
-    toast.success(t('scheduleSaved'));
-  };
-
   const recentOwn = ownSessions.slice(0, 10);
-  const hasSchedule = Object.values(schedule).some(Boolean);
-
   return (
     <section className="animate-in fade-in-50 duration-200">
       <SettingsPanelHead
@@ -232,7 +178,9 @@ export function WorkTimePanel() {
             onClick={() => void load()}
             disabled={loading}
           >
-            <RefreshCw className={cn('mr-1 h-3.5 w-3.5', loading && 'animate-spin')} />
+            <RefreshCw
+              className={cn('mr-1 h-3.5 w-3.5', loading && 'animate-spin')}
+            />
             {t('refresh')}
           </Button>
         }
@@ -241,24 +189,26 @@ export function WorkTimePanel() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="md:col-span-2">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-foreground">
-              <Clock className="size-4 text-primary" />
+            <CardTitle className="text-foreground flex items-center gap-2">
+              <Clock className="text-primary size-4" />
               {t('myStatus')}
             </CardTitle>
             <CardDescription>
               {work.active
                 ? work.onBreak
                   ? t('onBreak')
-                  : t('onShiftSince', { time: timeLabel(work.active.started_at) })
+                  : t('onShiftSince', {
+                      time: timeLabel(work.active.started_at),
+                    })
                 : t('offShift')}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-3xl font-semibold tracking-tight text-foreground tabular-nums">
+              <p className="text-foreground text-3xl font-semibold tracking-tight tabular-nums">
                 {work.active ? formatClock(work.elapsedSeconds) : '—'}
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="text-muted-foreground mt-1 text-xs">
                 {t('elapsed')}
               </p>
             </div>
@@ -268,7 +218,7 @@ export function WorkTimePanel() {
               className={cn(
                 work.active
                   ? 'bg-red-600 text-white hover:bg-red-700'
-                  : 'bg-primary text-primary-foreground hover:bg-primary/90',
+                  : 'bg-primary text-primary-foreground hover:bg-primary/90'
               )}
             >
               {work.busy ? (
@@ -285,25 +235,27 @@ export function WorkTimePanel() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-foreground">
-              <Users className="size-4 text-primary" />
+            <CardTitle className="text-foreground flex items-center gap-2">
+              <Users className="text-primary size-4" />
               {t('activeNow')}
             </CardTitle>
-            <CardDescription>{t('workingNow', { count: work.pulse })}</CardDescription>
+            <CardDescription>
+              {t('workingNow', { count: work.pulse })}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-semibold tracking-tight text-foreground tabular-nums">
+            <p className="text-foreground text-3xl font-semibold tracking-tight tabular-nums">
               {work.pulse}
             </p>
-            <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+            <div className="text-muted-foreground mt-4 flex items-center justify-between text-xs">
               <span>{t('today')}</span>
-              <span className="font-medium text-foreground tabular-nums">
+              <span className="text-foreground font-medium tabular-nums">
                 {formatHours(ownToday)}
               </span>
             </div>
-            <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+            <div className="text-muted-foreground mt-2 flex items-center justify-between text-xs">
               <span>{t('thisWeek')}</span>
-              <span className="font-medium text-foreground tabular-nums">
+              <span className="text-foreground font-medium tabular-nums">
                 {formatHours(ownWeek)}
               </span>
             </div>
@@ -311,87 +263,11 @@ export function WorkTimePanel() {
         </Card>
       </div>
 
-      <Card className="mt-4">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <Clock className="size-4 text-muted-foreground" />
-            {t('scheduleTitle')}
-          </CardTitle>
-          <CardDescription>{t('scheduleDesc')}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isAdmin ? (
-            <>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {(
-                  [
-                    ['workday_start', t('workdayStart')],
-                    ['workday_end', t('workdayEnd')],
-                    ['break_start', t('breakStart')],
-                    ['break_end', t('breakEnd')],
-                  ] as const
-                ).map(([key, label]) => (
-                  <div key={key} className="space-y-1.5">
-                    <label className="block text-xs text-muted-foreground">
-                      {label}
-                    </label>
-                    <input
-                      type="time"
-                      value={schedule[key]}
-                      onChange={(e) => {
-                        setSchedule((current) => ({
-                          ...current,
-                          [key]: e.target.value,
-                        }));
-                        setScheduleDirty(true);
-                      }}
-                      className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
-                    />
-                  </div>
-                ))}
-              </div>
-              <Button
-                onClick={() => void saveSchedule()}
-                disabled={savingSchedule || !scheduleDirty}
-                className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                {savingSchedule && (
-                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                )}
-                {t('saveSchedule')}
-              </Button>
-            </>
-          ) : !hasSchedule ? (
-            <p className="text-sm text-muted-foreground">
-              {t('scheduleNotSet')}
-            </p>
-          ) : (
-            <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-              {(
-                [
-                  ['workday_start', t('workdayStart')],
-                  ['workday_end', t('workdayEnd')],
-                  ['break_start', t('breakStart')],
-                  ['break_end', t('breakEnd')],
-                ] as const
-              ).map(([key, label]) => (
-                <div key={key}>
-                  <p className="text-xs text-muted-foreground">{label}</p>
-                  <p className="mt-0.5 text-foreground">
-                    {schedule[key] || '—'}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       {isAdmin && (
         <Card className="mt-4">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-foreground">
-              <Users className="size-4 text-primary" />
+            <CardTitle className="text-foreground flex items-center gap-2">
+              <Users className="text-primary size-4" />
               {t('team')}
             </CardTitle>
             <CardDescription>{t('teamDesc')}</CardDescription>
@@ -399,17 +275,23 @@ export function WorkTimePanel() {
           <CardContent className="overflow-x-auto">
             {loading ? (
               <div className="flex justify-center py-8">
-                <Loader2 className="size-5 animate-spin text-primary" />
+                <Loader2 className="text-primary size-5 animate-spin" />
               </div>
             ) : (
               <table className="w-full min-w-[560px] text-sm">
                 <thead>
-                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                  <tr className="border-border text-muted-foreground border-b text-left text-xs">
                     <th className="pb-2 font-medium">{t('employee')}</th>
                     <th className="pb-2 font-medium">{t('status')}</th>
-                    <th className="pb-2 text-right font-medium">{t('today')}</th>
-                    <th className="pb-2 text-right font-medium">{t('thisWeek')}</th>
-                    <th className="pb-2 text-right font-medium">{t('lastCheckIn')}</th>
+                    <th className="pb-2 text-right font-medium">
+                      {t('today')}
+                    </th>
+                    <th className="pb-2 text-right font-medium">
+                      {t('thisWeek')}
+                    </th>
+                    <th className="pb-2 text-right font-medium">
+                      {t('lastCheckIn')}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -417,18 +299,24 @@ export function WorkTimePanel() {
                     const label = member.full_name || member.email || '—';
                     const initial = label.charAt(0).toUpperCase();
                     return (
-                      <tr key={member.user_id} className="border-b border-border/60 last:border-0">
+                      <tr
+                        key={member.user_id}
+                        className="border-border/60 border-b last:border-0"
+                      >
                         <td className="py-2.5 pr-3">
                           <div className="flex items-center gap-2">
                             <Avatar className="size-7">
                               {member.avatar_url ? (
-                                <AvatarImage src={member.avatar_url} alt={label} />
+                                <AvatarImage
+                                  src={member.avatar_url}
+                                  alt={label}
+                                />
                               ) : null}
-                              <AvatarFallback className="bg-primary/10 text-[10px] text-primary">
+                              <AvatarFallback className="bg-primary/10 text-primary text-[10px]">
                                 {initial}
                               </AvatarFallback>
                             </Avatar>
-                            <span className="max-w-[220px] truncate text-foreground">
+                            <span className="text-foreground max-w-[220px] truncate">
                               {label}
                             </span>
                           </div>
@@ -437,25 +325,37 @@ export function WorkTimePanel() {
                           <span
                             className={cn(
                               'inline-flex items-center gap-1.5 text-xs',
-                              active ? (active.break_started_at ? 'text-amber-500' : 'text-emerald-500') : 'text-muted-foreground',
+                              active
+                                ? active.break_started_at
+                                  ? 'text-amber-500'
+                                  : 'text-emerald-500'
+                                : 'text-muted-foreground'
                             )}
                           >
                             <span
                               className={cn(
                                 'size-1.5 rounded-full',
-                                active ? (active.break_started_at ? 'bg-amber-500' : 'bg-emerald-500') : 'bg-muted-foreground/50',
+                                active
+                                  ? active.break_started_at
+                                    ? 'bg-amber-500'
+                                    : 'bg-emerald-500'
+                                  : 'bg-muted-foreground/50'
                               )}
                             />
-                            {active ? (active.break_started_at ? t('onBreak') : t('active')) : t('finished')}
+                            {active
+                              ? active.break_started_at
+                                ? t('onBreak')
+                                : t('active')
+                              : t('finished')}
                           </span>
                         </td>
-                        <td className="py-2.5 text-right text-foreground tabular-nums">
+                        <td className="text-foreground py-2.5 text-right tabular-nums">
                           {formatHours(today)}
                         </td>
-                        <td className="py-2.5 text-right text-foreground tabular-nums">
+                        <td className="text-foreground py-2.5 text-right tabular-nums">
                           {formatHours(week)}
                         </td>
-                        <td className="py-2.5 text-right text-muted-foreground tabular-nums">
+                        <td className="text-muted-foreground py-2.5 text-right tabular-nums">
                           {timeLabel(last)}
                         </td>
                       </tr>
@@ -470,42 +370,45 @@ export function WorkTimePanel() {
 
       <Card className="mt-4">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <Clock className="size-4 text-muted-foreground" />
+          <CardTitle className="text-foreground flex items-center gap-2">
+            <Clock className="text-muted-foreground size-4" />
             {t('myHistory')}
           </CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
             <div className="flex justify-center py-8">
-              <Loader2 className="size-5 animate-spin text-primary" />
+              <Loader2 className="text-primary size-5 animate-spin" />
             </div>
           ) : recentOwn.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
+            <p className="text-muted-foreground py-6 text-center text-sm">
               {t('noSessions')}
             </p>
           ) : (
-            <ul className="divide-y divide-border">
+            <ul className="divide-border divide-y">
               {recentOwn.map((session) => (
                 <li
                   key={session.id}
                   className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm"
                 >
                   <span className="text-foreground">
-                    {new Date(session.started_at).toLocaleDateString(undefined, {
-                      weekday: 'short',
-                      day: '2-digit',
-                      month: 'short',
-                    })}
+                    {new Date(session.started_at).toLocaleDateString(
+                      undefined,
+                      {
+                        weekday: 'short',
+                        day: '2-digit',
+                        month: 'short',
+                      }
+                    )}
                   </span>
                   <span className="text-muted-foreground tabular-nums">
                     {timeLabel(session.started_at)} –{' '}
-                    {session.ended_at ? timeLabel(session.ended_at) : t('active')}
+                    {session.ended_at
+                      ? timeLabel(session.ended_at)
+                      : t('active')}
                   </span>
-                  <span className="font-medium text-foreground tabular-nums">
-                    {formatHours(
-                      overlapSeconds(session, 0, now),
-                    )}
+                  <span className="text-foreground font-medium tabular-nums">
+                    {formatHours(overlapSeconds(session, 0, now))}
                   </span>
                 </li>
               ))}

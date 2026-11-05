@@ -103,7 +103,13 @@
     "lastCheckIn": "Última entrada",
     "myHistory": "Minhas jornadas recentes",
     "noSessions": "Ainda não há jornadas registradas.",
-    "refresh": "Atualizar"
+    "refresh": "Atualizar",
+    "employeesOnline": "Funcionários online",
+    "workingLabel": "Trabalhando",
+    "finishedLabel": "Finalizaram",
+    "noOneOnline": "Ninguém online",
+    "workingNowTitle": "Trabalhando agora",
+    "noOneWorking": "Ninguém está trabalhando agora"
   },
   "Sidebar": {
     "title": "Xylar",
@@ -135,7 +141,8 @@
     "menuProfile": "Perfil",
     "menuSettings": "Configurações",
     "menuSignOut": "Sair",
-    "company": "Empresa"
+    "company": "Empresa",
+    "structure": "Estrutura da empresa"
   },
   "CommandPalette": {
     "title": "Buscar",
@@ -190,7 +197,9 @@
     "defaultAvatar": "Avatar",
     "menuProfile": "Perfil",
     "menuSettings": "Configurações",
-    "menuSignOut": "Sair"
+    "menuSignOut": "Sair",
+    "company": "Empresa",
+    "structure": "Estrutura da empresa"
   },
   "ModeToggle": {
     "switchMode": "Mudar para o modo {mode}"
@@ -863,7 +872,9 @@
         "email": "E-mail",
         "company": "Empresa",
         "tags": "Tags",
-        "createdAt": "Criado em"
+        "createdAt": "Criado em",
+        "handle": "Telefone / usuário",
+        "user": "Usuário"
       },
       "loading": "Carregando contatos...",
       "noContactsMatch": "Nenhum contato corresponde aos seus filtros.",
@@ -1100,7 +1111,10 @@
       "allChannels": "Todos os canais",
       "stageCount": "{count} etapas",
       "dealCount": "{count} negócios",
-      "toastNoConversation": "Este negócio não tem uma conversa vinculada"
+      "toastNoConversation": "Este negócio não tem uma conversa vinculada",
+      "configurePipeline": "Configurar funil",
+      "searchDeals": "Buscar negócios ou contatos...",
+      "searchResults": "{count, plural, one {# resultado} other {# resultados}}"
     },
     "board": {
       "dropDealHere": "Solte um negócio aqui",
@@ -1110,7 +1124,8 @@
       "noContact": "Sem contato",
       "won": "Ganho",
       "lost": "Perdido",
-      "openChat": "Abrir conversa"
+      "openChat": "Abrir conversa",
+      "stalled": "Sem movimento"
     },
     "form": {
       "editDeal": "Editar negócio",
@@ -1205,7 +1220,15 @@
       "wonThisMonthTooltip": "Negócios marcados como ganhos desde o primeiro dia do mês atual.",
       "lostThisMonth": "Perdidos neste mês",
       "lostThisMonthTooltip": "Negócios marcados como perdidos desde o primeiro dia do mês atual.",
-      "howCalculated": "Como {label} é calculado"
+      "howCalculated": "Como {label} é calculado",
+      "openDeals": "Negócios abertos",
+      "openDealsTooltip": "Negócios que não estão marcados como ganhos ou perdidos.",
+      "ofTotal": "{count} no total",
+      "thisMonth": "este mês",
+      "conversionRate": "Taxa de conversão",
+      "conversionRateTooltip": "Negócios ganhos dividido entre ganhos e perdidos deste mês.",
+      "wonVsLost": "{won, plural, one {# ganho} other {# ganhos}} · {lost, plural, one {# perdido} other {# perdidos}}",
+      "noClosedDeals": "Sem fechamentos este mês"
     },
     "manage": {
       "title": "Gerenciar funis",
@@ -1264,6 +1287,20 @@
       "empty": "Não há mensagens nesta conversa",
       "placeholder": "Escreva uma mensagem…",
       "send": "Enviar"
+    },
+    "health": {
+      "title": "Saúde do funil",
+      "description": "Distribuição e pontos de atenção.",
+      "openDeals": "{count, plural, one {# aberto} other {# abertos}}",
+      "stageDistribution": "Distribuição por etapa",
+      "noDeals": "Ainda não há negócios neste funil.",
+      "stalled": "Negócios estagnados",
+      "stalledDesc": "{days}+ dias sem movimento",
+      "noStalled": "Tudo em movimento",
+      "oldest": "Maior tempo sem avanço",
+      "avgAge": "Idade média",
+      "days": "{count, plural, one {# dia} other {# dias}}",
+      "openLabel": "Abertos"
     }
   },
   "Broadcasts": {
@@ -1324,7 +1361,8 @@
         "sent": "Enviada",
         "delivered": "Entregue",
         "read": "Lida",
-        "error": "Erro"
+        "error": "Erro",
+        "user": "Usuário"
       },
       "stats": {
         "totalRecipients": "Total de destinatários",
@@ -1492,7 +1530,8 @@
       "fetchRecipientsFailed": "Falha ao buscar os destinatários do disparo",
       "apiRequestFailed": "Falha na requisição à API de disparo",
       "noPhoneOnContact": "O contato não tem número de telefone",
-      "unknownError": "Erro desconhecido"
+      "unknownError": "Erro desconhecido",
+      "noSendIdentity": "O contato não tem telefone nem identidade do WhatsApp"
     }
   },
   "Automations": {
@@ -2109,7 +2148,8 @@
       "fieldsCount": "{count} {count, plural, =1 {campo personalizado} other {campos personalizados}}",
       "appearance": "modo {mode} · destaque {theme}",
       "yourAccount": "Sua conta",
-      "loading": "Carregando…"
+      "loading": "Carregando…",
+      "allSections": "Todas as seções"
     },
     "members": {
       "title": "Membros da equipe",
@@ -2222,7 +2262,8 @@
       "userCreatedDesc": "{email} foi adicionado à equipe.",
       "tempPasswordLabel": "Senha temporária",
       "tempPasswordHint": "Compartilhe esta senha por um canal seguro. O usuário pode alterá-la após entrar.",
-      "copiedPassword": "Senha temporária copiada"
+      "copiedPassword": "Senha temporária copiada",
+      "create": "Criar"
     },
     "tagsAndFields": {
       "title": "Campos e tags",
@@ -2375,7 +2416,27 @@
         "Authentication": "Autenticação"
       },
       "allChannels": "Todos os canais",
-      "templateChannel": "Canal"
+      "templateChannel": "Canal",
+      "searchPlaceholder": "Buscar modelos...",
+      "allStatuses": "Todos os status",
+      "statsTotal": "Total",
+      "statsApproved": "Aprovadas",
+      "statsPending": "Em revisão",
+      "statsAttention": "Com problemas",
+      "clearFilters": "Limpar filtros",
+      "noMatches": "Nenhum modelo corresponde a estes filtros.",
+      "tableTemplate": "Modelo",
+      "tableStatus": "Status",
+      "tableCategory": "Categoria",
+      "tableChannel": "Canal",
+      "tableActions": "Ações",
+      "resultsCount": "Mostrando {shown} de {total} modelos",
+      "languageSearchPlaceholder": "Buscar idioma...",
+      "languageNoResults": "Nenhum idioma encontrado.",
+      "languageUseCustom": "Usar \"{code}\"",
+      "sectionBasic": "Informações básicas",
+      "sectionContent": "Conteúdo da mensagem",
+      "sectionButtons": "Botões"
     },
     "roles": {
       "departmentRoleLabel": "Papel no departamento",
@@ -2568,7 +2629,14 @@
       "companyNameHint": "Exibido como a empresa no topo do organograma.",
       "saveCompany": "Salvar empresa",
       "companyUpdated": "Nome da empresa atualizado",
-      "totalEmployees": "Total"
+      "totalEmployees": "Total",
+      "fullscreen": "Tela cheia",
+      "closeFullscreen": "Fechar tela cheia",
+      "directory": "Diretório de pessoas",
+      "searchPeople": "Buscar por nome, cargo ou departamento",
+      "supervisors": "Supervisores",
+      "noSupervisors": "Sem supervisores atribuídos",
+      "noPeopleMatch": "Nenhuma pessoa corresponde à busca"
     },
     "channels": {
       "title": "Canais do WhatsApp",
@@ -3747,6 +3815,7 @@
       "emptyDesc": "Convide seu primeiro funcionário ou ajuste a busca.",
       "you": "Você",
       "unnamed": "Sem nome"
-    }
+    },
+    "structureButton": "Estrutura da empresa"
   }
 }

@@ -50,9 +50,8 @@ export function SettingsRail({
     <nav
       aria-label={t('sectionsNav')}
       className={cn(
-        'flex gap-1 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
-        'border-b border-border',
-        'lg:sticky lg:top-0 lg:flex-col lg:overflow-visible lg:border-b-0 lg:pb-0',
+        'border-border bg-card flex gap-1 overflow-x-auto rounded-xl border p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+        'lg:sticky lg:top-6 lg:flex-col lg:overflow-visible lg:rounded-2xl lg:p-2 lg:shadow-sm',
       )}
     >
       {RAIL_GROUPS.map(({ label, group }) => {
@@ -65,7 +64,7 @@ export function SettingsRail({
             className="flex shrink-0 gap-1 lg:flex-col lg:gap-0.5"
           >
             {label ? (
-              <div className="hidden px-3 pt-3.5 pb-1.5 text-[11px] font-semibold tracking-[0.09em] text-muted-foreground uppercase lg:block">
+              <div className="text-muted-foreground hidden px-2.5 pt-3 pb-1.5 text-[10px] font-semibold tracking-[0.12em] uppercase lg:block">
                 {t(`groups.${group}`)}
               </div>
             ) : null}
@@ -81,14 +80,23 @@ export function SettingsRail({
                   onClick={() => onSelect(s)}
                   aria-current={isActive ? 'page' : undefined}
                   className={cn(
-                    'flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium whitespace-nowrap transition-colors',
+                    'flex shrink-0 items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium whitespace-nowrap transition-colors',
                     'lg:w-full',
                     isActive
-                      ? 'bg-primary-soft text-primary'
+                      ? 'bg-primary-soft text-primary ring-primary/15 ring-1'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                   )}
                 >
-                  <Icon className="size-4 shrink-0" />
+                  <span
+                    className={cn(
+                      'flex size-7 shrink-0 items-center justify-center rounded-lg transition-colors',
+                      isActive
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted/70 text-muted-foreground',
+                    )}
+                  >
+                    <Icon className="size-3.5" />
+                  </span>
                   <span className="flex-1">{t(`sections.${s}`)}</span>
                   {hints?.[s] != null ? (
                     <span

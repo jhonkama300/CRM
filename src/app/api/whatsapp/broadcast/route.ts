@@ -1,30 +1,31 @@
-import { NextResponse } from 'next/server'
-import { requireRole, toErrorResponse } from '@/lib/auth/account'
-import { recordAudit } from '@/lib/audit/log'
-import { sendTemplateMessage } from '@/lib/whatsapp/meta-api'
-import { decrypt } from '@/lib/whatsapp/encryption'
-import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder'
-import { resolveTemplateRow } from '@/lib/whatsapp/template-body'
+import { NextResponse } from 'next/server';
+import { requireRole, toErrorResponse } from '@/lib/auth/account';
+import { recordAudit } from '@/lib/audit/log';
+import { sendTemplateMessage } from '@/lib/whatsapp/meta-api';
+import { decrypt } from '@/lib/whatsapp/encryption';
+import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder';
+import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
 import {
   sanitizePhoneForMeta,
   isValidE164,
   phoneVariants,
   isRecipientNotAllowedError,
-} from '@/lib/whatsapp/phone-utils'
+} from '@/lib/whatsapp/phone-utils';
+import { isBusinessScopedUserId } from '@/lib/whatsapp/wa-identity';
 import {
   checkRateLimit,
   rateLimitResponse,
   RATE_LIMITS,
-} from '@/lib/rate-limit'
-import { getT } from '@/lib/i18n/translate'
+} from '@/lib/rate-limit';
+import { getT } from '@/lib/i18n/translate';
 
-const t = getT('Api')
+const t = getT('Api');
 
 interface BroadcastResult {
-  phone: string
-  status: 'sent' | 'failed'
-  whatsapp_message_id?: string
-  error?: string
+  phone: string;
+  status: 'sent' | 'failed';
+  whatsapp_message_id?: string;
+  error?: string;
 }
 
 /**
@@ -50,16 +51,18 @@ interface BroadcastResult {
  * shape is what actually fixes that.
  */
 interface NewRecipient {
-  phone: string
+  phone?: string;
+  /** Business-scoped WhatsApp user id for username-only contacts. */
+  recipient?: string;
   /** Body variable values, one per {{N}}. Legacy field. */
-  params?: string[]
+  params?: string[];
   /**
    * Structured per-send values (header text variable, media URL
    * override, URL/COPY_CODE button values). When set, takes
    * precedence over `params` for the body too — see
    * sendTemplateMessage for the merge rules.
    */
-  messageParams?: SendTimeParams
+  messageParams?: SendTimeParams;
 }
 
 export async function POST(request: Request) {
@@ -76,17 +79,17 @@ export async function POST(request: Request) {
     // to arbitrary phone numbers from the account's WhatsApp number.
     // Nothing about that is recoverable after the fact, so the check has
     // to happen here.
-    const { supabase, accountId, userId } = await requireRole('agent')
+    const { supabase, accountId, userId } = await requireRole('agent');
 
     // Per-user broadcast budget. Note: this limits how often a user
     // can *start* a campaign, not how many messages go out inside
     // one — the fan-out loop below runs without additional gating.
-    const limit = checkRateLimit(`broadcast:${userId}`, RATE_LIMITS.broadcast)
+    const limit = checkRateLimit(`broadcast:${userId}`, RATE_LIMITS.broadcast);
     if (!limit.success) {
-      return rateLimitResponse(limit)
+      return rateLimitResponse(limit);
     }
 
-    const body = await request.json()
+    const body = await request.json();
     const {
       recipients: newRecipients,
       phone_numbers,
@@ -94,40 +97,41 @@ export async function POST(request: Request) {
       template_language,
       template_params,
       channel_id,
-    } = body
+    } = body;
 
     // Normalize to a list of {phone, params} regardless of shape.
-    let recipients: NewRecipient[]
+    let recipients: NewRecipient[];
     if (Array.isArray(newRecipients) && newRecipients.length > 0) {
-      recipients = newRecipients
+      recipients = newRecipients;
     } else if (Array.isArray(phone_numbers) && phone_numbers.length > 0) {
       const shared: string[] = Array.isArray(template_params)
         ? template_params
-        : []
+        : [];
       recipients = phone_numbers.map((phone: string) => ({
         phone,
         params: shared,
-      }))
+      }));
     } else {
       return NextResponse.json(
         {
-          error:
-            t('broadcast.recipientsRequired'),
+          error: t('broadcast.recipientsRequired'),
         },
         { status: 400 }
-      )
+      );
     }
 
     if (!template_name) {
       return NextResponse.json(
         { error: t('broadcast.templateNameRequired') },
         { status: 400 }
-      )
+      );
     }
 
-    let channel = null as
-      | { id: string; phone_number_id: string; access_token: string }
-      | null
+    let channel = null as {
+      id: string;
+      phone_number_id: string;
+      access_token: string;
+    } | null;
 
     if (typeof channel_id === 'string' && channel_id.trim()) {
       const { data } = await supabase
@@ -135,8 +139,8 @@ export async function POST(request: Request) {
         .select('id, phone_number_id, access_token')
         .eq('id', channel_id.trim())
         .eq('account_id', accountId)
-        .maybeSingle()
-      channel = data
+        .maybeSingle();
+      channel = data;
     }
 
     if (!channel) {
@@ -146,18 +150,18 @@ export async function POST(request: Request) {
         .eq('account_id', accountId)
         .order('created_at', { ascending: true })
         .limit(1)
-        .maybeSingle()
-      channel = data
+        .maybeSingle();
+      channel = data;
     }
 
     if (!channel) {
       return NextResponse.json(
         { error: t('common.whatsappNotConfiguredSetup') },
-        { status: 400 },
-      )
+        { status: 400 }
+      );
     }
 
-    const accessToken = decrypt(channel.access_token)
+    const accessToken = decrypt(channel.access_token);
 
     // Load the template row once so sendTemplateMessage can build
     // header + button components on each iteration. Loading inside
@@ -168,41 +172,50 @@ export async function POST(request: Request) {
       supabase,
       accountId,
       template_name,
-      template_language,
-    )
+      template_language
+    );
     if (resolvedTemplate.malformed) {
       return NextResponse.json(
         {
-          error:
-            t('broadcast.templateMalformed'),
+          error: t('broadcast.templateMalformed'),
         },
-        { status: 500 },
-      )
+        { status: 500 }
+      );
     }
-    const templateRow = resolvedTemplate.row
+    const templateRow = resolvedTemplate.row;
 
-    const results: BroadcastResult[] = []
-    let sentCount = 0
-    let failedCount = 0
+    const results: BroadcastResult[] = [];
+    let sentCount = 0;
+    let failedCount = 0;
 
     for (const recipient of recipients) {
-      const sanitized = sanitizePhoneForMeta(recipient.phone)
+      const rawPhone =
+        typeof recipient.phone === 'string' ? recipient.phone.trim() : '';
+      const rawRecipient =
+        typeof recipient.recipient === 'string'
+          ? recipient.recipient.trim()
+          : '';
+      const isBsuid = isBusinessScopedUserId(rawRecipient);
+      // Phone wins when present. Username-only contacts fall back to
+      // their business-scoped user id, which meta-api sends through
+      // the `recipient` field instead of `to`.
+      const target = isBsuid ? rawRecipient : sanitizePhoneForMeta(rawPhone);
 
-      if (!isValidE164(sanitized)) {
+      if (!target || (!isBsuid && !isValidE164(target))) {
         results.push({
-          phone: recipient.phone,
+          phone: rawPhone || rawRecipient,
           status: 'failed',
           error: t('broadcast.invalidPhoneFormat'),
-        })
-        failedCount++
-        continue
+        });
+        failedCount++;
+        continue;
       }
 
-      // Retry with phone variants on "not in allowed list" so numbers
-      // that differ only in a trunk-prefix 0 still reach recipients.
-      const variants = phoneVariants(sanitized)
-      let sentMessageId: string | null = null
-      let lastError: string | null = null
+      // Phone variants only make sense for numbers. A BSUID is opaque
+      // and has exactly one valid form.
+      const variants = isBsuid ? [target] : phoneVariants(target);
+      let sentMessageId: string | null = null;
+      let lastError: string | null = null;
 
       for (const variant of variants) {
         try {
@@ -215,40 +228,37 @@ export async function POST(request: Request) {
             template: templateRow ?? undefined,
             messageParams: recipient.messageParams,
             params: recipient.params ?? [],
-          })
-          sentMessageId = result.messageId
-          lastError = null
-          break
+          });
+          sentMessageId = result.messageId;
+          lastError = null;
+          break;
         } catch (error) {
           const errorMessage =
-            error instanceof Error ? error.message : t('common.unknownError')
+            error instanceof Error ? error.message : t('common.unknownError');
           if (!isRecipientNotAllowedError(errorMessage)) {
-            lastError = errorMessage
-            break
+            lastError = errorMessage;
+            break;
           }
-          lastError = errorMessage
+          lastError = errorMessage;
           // retry with next variant
         }
       }
 
       if (sentMessageId) {
         results.push({
-          phone: recipient.phone,
+          phone: target,
           status: 'sent',
           whatsapp_message_id: sentMessageId,
-        })
-        sentCount++
+        });
+        sentCount++;
       } else {
-        console.error(
-          `Failed to send broadcast to ${recipient.phone}:`,
-          lastError
-        )
+        console.error(`Failed to send broadcast to ${target}:`, lastError);
         results.push({
-          phone: recipient.phone,
+          phone: target,
           status: 'failed',
           error: lastError || t('common.unknownError'),
-        })
-        failedCount++
+        });
+        failedCount++;
       }
     }
 
@@ -264,7 +274,7 @@ export async function POST(request: Request) {
         sent: sentCount,
         failed: failedCount,
       },
-    })
+    });
 
     return NextResponse.json({
       success: true,
@@ -272,11 +282,11 @@ export async function POST(request: Request) {
       sent: sentCount,
       failed: failedCount,
       results,
-    })
+    });
   } catch (error) {
     // requireRole throws Unauthorized/Forbidden; toErrorResponse maps
     // those to 401/403 and collapses anything else to a generic 500.
-    console.error('Error in WhatsApp broadcast POST:', error)
-    return toErrorResponse(error)
+    console.error('Error in WhatsApp broadcast POST:', error);
+    return toErrorResponse(error);
   }
 }

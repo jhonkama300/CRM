@@ -58,6 +58,8 @@ export interface CreateBroadcastParams {
 interface PlannedRecipient {
   recipientRowId: string;
   phone: string;
+  /** False when `phone` is a BSUID rather than a phone number. */
+  isPhone?: boolean;
   params: string[];
 }
 
@@ -233,7 +235,11 @@ export async function createBroadcast(
   const planned: PlannedRecipient[] = createdRows.map(
     (row: { recipient_id: string; contact_id: string }) => {
       const r = byContact.get(row.contact_id)!;
-      return { recipientRowId: row.recipient_id, phone: r.phone, params: r.params };
+      return {
+        recipientRowId: row.recipient_id,
+        phone: r.phone,
+        params: r.params,
+      };
     }
   );
 
@@ -268,7 +274,10 @@ export async function deliverBroadcast(
   plan: BroadcastPlan
 ): Promise<void> {
   for (const recipient of plan.planned) {
-    const variants = phoneVariants(recipient.phone);
+    const variants =
+      recipient.isPhone === false
+        ? [recipient.phone]
+        : phoneVariants(recipient.phone);
     let sentMessageId: string | null = null;
     let lastError: string | null = null;
 
@@ -287,7 +296,8 @@ export async function deliverBroadcast(
         lastError = null;
         break;
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
+        const message =
+          error instanceof Error ? error.message : 'Unknown error';
         lastError = message;
         // Only a "recipient not allowed" error is worth another variant.
         if (!isRecipientNotAllowedError(message)) break;
