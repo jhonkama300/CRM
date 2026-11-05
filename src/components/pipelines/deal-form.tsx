@@ -251,6 +251,26 @@ export function DealForm({
       toast.error(t("toastFailedStatus"));
       return;
     }
+
+    if (status === "won" && linkedConversation) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const { error: closeError } = await supabase
+        .from("conversations")
+        .update({
+          status: "closed",
+          closed_by_user_id: user?.id ?? null,
+        })
+        .eq("id", linkedConversation.id);
+      if (closeError) {
+        console.error(
+          "Failed to finalize conversation after winning deal:",
+          closeError.message,
+        );
+      }
+    }
+
     toast.success(
       status === "won" ? t("toastMarkedWon") : status === "lost" ? t("toastMarkedLost") : t("toastReopened"),
     );

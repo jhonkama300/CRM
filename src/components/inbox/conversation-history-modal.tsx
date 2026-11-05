@@ -21,6 +21,7 @@ interface ConversationRow {
   status: ConversationStatus
   created_at: string
   closed_at: string | null
+  closed_by_user_id: string | null
   updated_at: string
   assigned_agent_id: string | null
 }
@@ -96,7 +97,7 @@ export function ConversationHistoryModal({
         supabase
           .from("conversations")
           .select(
-            "id, status, created_at, closed_at, updated_at, assigned_agent_id",
+            "id, status, created_at, closed_at, closed_by_user_id, updated_at, assigned_agent_id",
           )
           .eq("contact_id", contact.id)
           .order("created_at", { ascending: false }),
@@ -177,6 +178,9 @@ export function ConversationHistoryModal({
         formatDateTime(conversation.created_at),
         formatDateTime(conversation.closed_at),
         profileName(conversation.assigned_agent_id),
+        conversation.closed_by_user_id
+          ? profileName(conversation.closed_by_user_id)
+          : "",
         responders,
       ]
         .join(" ")
@@ -350,6 +354,14 @@ export function ConversationHistoryModal({
                           {t("assignedTo")}:{" "}
                           {profileName(conversation.assigned_agent_id)}
                         </p>
+                        {closed ? (
+                          <p>
+                            {t("closedBy")}:{" "}
+                            {conversation.closed_by_user_id
+                              ? profileName(conversation.closed_by_user_id)
+                              : t("automatic")}
+                          </p>
+                        ) : null}
                         <p>
                           {t("respondedBy")}:{" "}
                           {responders.length ? responders.join(", ") : "—"}

@@ -19,6 +19,8 @@ interface ReplyQuoteProps {
    *  quote must read against the primary surface rather than the neutral
    *  foreground — otherwise it goes low-contrast in light mode. */
   onPrimary?: boolean;
+  /** Force a neutral quote surface, used inside neutral chat bubbles. */
+  neutral?: boolean;
 }
 
 export function ReplyQuote({
@@ -26,6 +28,7 @@ export function ReplyQuote({
   preview,
   onDismiss,
   onPrimary = false,
+  neutral = false,
 }: ReplyQuoteProps) {
   const t = useTranslations("Inbox.replyQuote");
   const isChip = !!onDismiss;
@@ -33,19 +36,29 @@ export function ReplyQuote({
     <div
       className={cn(
         "flex items-start gap-2 border-l-2 px-2 py-1",
-        onPrimary ? "border-primary-foreground/50" : "border-primary",
+        neutral
+          ? "border-border"
+          : onPrimary
+            ? "border-primary-foreground/50"
+            : "border-primary",
         isChip
           ? "rounded-md bg-muted/80"
-          : onPrimary
-            ? "mb-1.5 rounded-md bg-primary-foreground/15"
-            : "mb-1.5 rounded-md bg-background/20",
+          : neutral
+            ? "mb-1.5 rounded-md bg-muted/60"
+            : onPrimary
+              ? "mb-1.5 rounded-md bg-primary-foreground/15"
+              : "mb-1.5 rounded-md bg-background/20",
       )}
     >
       <div className="min-w-0 flex-1 overflow-hidden">
         <div
           className={cn(
             "truncate text-[11px] font-medium",
-            onPrimary ? "text-primary-foreground" : "text-primary",
+            neutral
+              ? "text-muted-foreground"
+              : onPrimary
+                ? "text-primary-foreground"
+                : "text-primary",
           )}
         >
           {authorLabel}

@@ -227,6 +227,8 @@ export interface Conversation {
   last_inbound_at?: string | null;
   last_reply_at?: string | null;
   closed_at?: string | null;
+  /** Profile that finalized the conversation; NULL for automation closes. */
+  closed_by_user_id?: string | null;
   created_at: string;
   updated_at: string;
   contact?: Contact;
@@ -313,6 +315,10 @@ export interface Message {
   template_name?: string;
   message_id?: string;
   status: MessageStatus;
+  /** Set from the delivered status webhook. */
+  delivered_at?: string | null;
+  /** Set from the read status webhook. */
+  read_at?: string | null;
   created_at: string;
   reply_to_message_id?: string;
   /**

@@ -633,13 +633,29 @@
       "openContact": "Abrir contato",
       "openDeal": "Abrir um negócio",
       "chatHistory": "Histórico da conversa",
-      "closeConversation": "Fechar conversa"
+      "closeConversation": "Fechar conversa",
+      "finalizeConversation": "Finalizar conversa",
+      "system": "Sistema",
+      "finalizedBy": "Finalizada por {name}",
+      "finalizedAutomatically": "Finalizada pelo sistema",
+      "transferConversation": "Transferir conversa",
+      "addAgent": "Adicionar agente à conversa",
+      "noAgentsToTransfer": "Não há outros agentes disponíveis",
+      "noAgentsToAdd": "Todos os agentes disponíveis já foram adicionados",
+      "agentAdded": "Agente adicionado à conversa",
+      "addAgentFailed": "Não foi possível adicionar o agente",
+      "reopenConversation": "Reabrir",
+      "aiAssistant": "Assistente de IA",
+      "bot": "Bot"
     },
     "sessionTimer": {
       "expired": "Expirada",
       "xhRemaining": "{hours}h restantes",
       "xmRemaining": "{minutes}min restantes",
-      "noCustomerMessages": "Nenhuma mensagem do cliente"
+      "noCustomerMessages": "Nenhuma mensagem do cliente",
+      "countdownHms": "{hours}h {minutes}m {seconds}s",
+      "countdownMs": "{minutes}m {seconds}s",
+      "remainingTitle": "Tempo restante para responder (janela de 24 h)"
     },
     "composer": {
       "draftHint": "Toque em ✨ para redigir uma resposta com IA — você pode editá-la antes de enviar",
@@ -712,7 +728,10 @@
       "viewImage": "Ver imagem",
       "expandVideo": "Expandir vídeo",
       "imageAlt": "Imagem compartilhada",
-      "retry": "Tentar novamente"
+      "retry": "Tentar novamente",
+      "sentAt": "Enviado às {time}",
+      "deliveredAt": "Entregue às {time}",
+      "readAt": "Lido às {time}"
     },
     "mediaViewer": {
       "counter": "{index} de {total}",
@@ -847,7 +866,9 @@
       "agent": "Agente",
       "customer": "Cliente",
       "ai": "IA",
-      "bot": "Bot"
+      "bot": "Bot",
+      "closedBy": "Finalizada por",
+      "automatic": "Sistema"
     }
   },
   "Contacts": {
@@ -2996,7 +3017,30 @@
       "mediaHint": "Com botões envia como mensagem interativa; sem botões envia como arquivo e o rodapé entra na legenda.",
       "textPlaceholder": "O texto da mensagem a inserir",
       "cancel": "Cancelar",
-      "save": "Salvar"
+      "save": "Salvar",
+      "previewTitle": "Pré-visualização",
+      "previewHint": "É assim que a mensagem chega ao usuário no WhatsApp.",
+      "previewEmpty": "Escreva uma mensagem para ver a pré-visualização.",
+      "previewMediaEmpty": "Envie um arquivo para ver a pré-visualização.",
+      "kindAudio": "Áudio",
+      "kindCta": "CTA",
+      "kindContact": "Solicitar contato",
+      "headerLabel": "Cabeçalho (opcional)",
+      "ctaType": "Ação do botão",
+      "ctaTypeUrl": "Abrir URL",
+      "ctaTypeCall": "Ligar",
+      "ctaButtonLabel": "Texto do botão",
+      "contactShareLabel": "O cliente verá um botão para compartilhar o contato.",
+      "audioHint": "Envie um arquivo de áudio (MP3, OGG, etc.).",
+      "variablesHint": "Inserir variável:",
+      "varName": "Nome",
+      "varPhone": "Telefone",
+      "varEmail": "E-mail",
+      "varCompany": "Empresa",
+      "varUsername": "Usuário",
+      "ctaUrlOnly": "A Meta só suporta botões de URL para mensagens CTA interativas.",
+      "deleteTitle": "Excluir resposta rápida",
+      "deleteButton": "Excluir"
     },
     "health": {
       "title": "Saúde operacional",

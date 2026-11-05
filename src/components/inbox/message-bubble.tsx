@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { cn } from "@/lib/utils";
 import type {
   Message,
@@ -44,6 +46,9 @@ interface MessageBubbleProps {
   template?: MessageTemplate | null;
   /** Pre-computed quote info for messages that reply to another. */
   reply?: { authorLabel: string; preview: string } | null;
+  /** Name shown as the title inside the bubble for the first message of a sender run. */
+  senderName?: string;
+  showSenderName?: boolean;
   reactions?: MessageReaction[];
   onToggleReaction?: (emoji: string) => void;
   /**
@@ -73,6 +78,7 @@ function LocalizedInteractivePreview({
   return (
     <InteractivePreview
       payload={payload}
+      neutral
       labels={{
         body: t("previewBody"),
         button: t("previewButton"),
@@ -142,24 +148,31 @@ function StatusIcon({
   title,
 }: {
   status: Message["status"];
-  /** Tooltip for the failed state — Meta's reason, when we have one. */
+  /** Tooltip with delivery/read timestamps or the failure reason. */
   title?: string | null;
 }) {
+  const withTitle = (icon: ReactNode) =>
+    title ? (
+      <span className="inline-flex" title={title}>
+        {icon}
+      </span>
+    ) : (
+      icon
+    );
+
   switch (status) {
     case "sending":
-      return <Clock className="h-3 w-3 text-muted-foreground" />;
+      return withTitle(<Clock className="h-3 w-3 text-muted-foreground" />);
     case "sent":
-      return <Check className="h-3 w-3 text-muted-foreground" />;
+      return withTitle(<Check className="h-3 w-3 text-muted-foreground" />);
     case "delivered":
-      return <CheckCheck className="h-3 w-3 text-muted-foreground" />;
-    case "read":
-      return <CheckCheck className="h-3 w-3 text-blue-400" />;
-    case "failed":
-      return (
-        <span className="inline-flex" title={title ?? undefined}>
-          <XCircle className="h-3 w-3 text-red-400" />
-        </span>
+      return withTitle(
+        <CheckCheck className="h-3 w-3 text-muted-foreground" />,
       );
+    case "read":
+      return withTitle(<CheckCheck className="h-3 w-3 text-sky-400" />);
+    case "failed":
+      return withTitle(<XCircle className="h-3 w-3 text-red-400" />);
     default:
       return null;
   }
@@ -169,15 +182,12 @@ function MessageContent({
   message,
   template,
   t,
-  isAgent,
   onOpenMedia,
   onRetryMedia,
 }: {
   message: Message;
   template: MessageTemplate | null;
   t: ReturnType<typeof useTranslations>;
-  /** Outbound bubbles sit on the primary fill - badges must invert. */
-  isAgent: boolean;
   onOpenMedia?: (messageId: string) => void;
   onRetryMedia?: () => void;
 }) {
@@ -253,14 +263,7 @@ function MessageContent({
       const view = templateMessageView(message, template);
       return (
         <div>
-          <span
-            className={cn(
-              "mb-1 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium",
-              isAgent
-                ? "bg-primary-foreground/20 text-primary-foreground"
-                : "bg-primary/20 text-primary",
-            )}
-          >
+          <span className="mb-1 inline-flex items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
             <LayoutTemplate className="h-3 w-3" />
             {t("template")}
           </span>
@@ -279,33 +282,18 @@ function MessageContent({
             )
           )}
           {view.footer && (
-            <p
-              className={cn(
-                "mt-1 break-words text-[11px]",
-                isAgent ? "text-primary-foreground/70" : "text-muted-foreground",
-              )}
-            >
+            <p className="mt-1 break-words text-[11px] text-muted-foreground">
               {view.footer}
             </p>
           )}
           {view.buttons.length > 0 && (
-            <div
-              className={cn(
-                "mt-2 flex flex-col border-t",
-                isAgent ? "border-primary-foreground/20" : "border-border",
-              )}
-            >
+            <div className="mt-2 flex flex-col border-t border-border">
               {view.buttons.map((button, i) => {
                 const Icon = TEMPLATE_BUTTON_ICONS[button.type];
                 return (
                   <span
                     key={i}
-                    className={cn(
-                      "flex items-center justify-center gap-1.5 border-t py-1.5 text-sm font-medium first:border-t-0",
-                      isAgent
-                        ? "border-primary-foreground/20 text-primary-foreground"
-                        : "border-border text-primary",
-                    )}
+                    className="flex items-center justify-center gap-1.5 border-t border-border py-1.5 text-sm font-medium text-foreground first:border-t-0"
                   >
                     <Icon className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">{button.text}</span>
@@ -372,6 +360,8 @@ export function MessageBubble({
   message,
   template = null,
   reply,
+  senderName,
+  showSenderName = false,
   reactions,
   onToggleReaction,
   onOpenMedia,
@@ -383,6 +373,24 @@ export function MessageBubble({
   const isAgent = message.sender_type === "agent" || message.sender_type === "bot";
   const time = format(new Date(message.created_at), "HH:mm");
   const failure = isAgent ? failureReason(message) : null;
+  const timeLabel = (iso: string | null | undefined) =>
+    iso ? format(new Date(iso), "HH:mm") : null;
+  const deliveredLabel = timeLabel(message.delivered_at);
+  const readLabel = timeLabel(message.read_at);
+  const statusTitle =
+    failure ??
+    (message.status === "read"
+      ? [
+          deliveredLabel ? t("deliveredAt", { time: deliveredLabel }) : null,
+          readLabel ? t("readAt", { time: readLabel }) : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : message.status === "delivered" && deliveredLabel
+        ? t("deliveredAt", { time: deliveredLabel })
+        : message.status === "sent"
+          ? t("sentAt", { time })
+          : null);
 
   // Row alignment + width cap are owned by <MessageActions> so its hover
   // group matches the bubble's content area, not the full row.
@@ -395,30 +403,39 @@ export function MessageBubble({
     >
       <div
         className={cn(
-          "relative rounded-2xl px-3 py-2",
+          "relative rounded-2xl px-3.5 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.10)]",
           isAgent
-            ? "rounded-br-md bg-primary text-primary-foreground"
-            : "rounded-bl-md bg-muted text-foreground",
+            ? "rounded-br-md border border-border/80 bg-secondary text-secondary-foreground"
+            : "rounded-bl-md border border-border/80 bg-card text-card-foreground",
         )}
       >
+        {showSenderName && senderName ? (
+          <p
+            className={cn(
+              "mb-1.5 max-w-full truncate text-[10px] font-semibold leading-tight tracking-wide",
+              "text-muted-foreground",
+            )}
+          >
+            {senderName}
+          </p>
+        ) : null}
         {reply && (
           <ReplyQuote
             authorLabel={reply.authorLabel}
             preview={reply.preview}
-            onPrimary={isAgent}
+            neutral
           />
         )}
         <MessageContent
           message={message}
           template={template}
           t={t}
-          isAgent={isAgent}
           onOpenMedia={onOpenMedia}
           onRetryMedia={onRetryMedia}
         />
         <div
           className={cn(
-            "mt-1 flex items-center gap-1",
+            "mt-1.5 flex items-center gap-1",
             isAgent ? "justify-end" : "justify-start",
           )}
         >
@@ -428,7 +445,7 @@ export function MessageBubble({
               glance. */}
           {message.ai_generated && (
             <span
-              className="inline-flex items-center gap-0.5 rounded-full bg-primary-foreground/20 px-1.5 py-px text-[9px] font-semibold uppercase leading-none tracking-wide text-primary-foreground"
+              className="inline-flex items-center gap-0.5 rounded-full border border-border bg-muted px-1.5 py-px text-[9px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
               title={t("aiBadgeTitle")}
             >
               <Sparkles className="h-2.5 w-2.5" />
@@ -437,17 +454,19 @@ export function MessageBubble({
           )}
           <span
             className={cn(
-              "text-[10px]",
+              "text-[9.5px] leading-none",
               // Outbound bubbles sit on the primary fill, so the
               // timestamp must read against that (not the neutral
               // foreground) — otherwise it goes low-contrast in light
               // mode. Inbound bubbles use the muted surface.
-              isAgent ? "text-primary-foreground/70" : "text-muted-foreground",
+              "text-muted-foreground",
             )}
           >
             {time}
           </span>
-          {isAgent && <StatusIcon status={message.status} title={failure} />}
+          {isAgent && (
+            <StatusIcon status={message.status} title={statusTitle} />
+          )}
         </div>
       </div>
       {failure && (

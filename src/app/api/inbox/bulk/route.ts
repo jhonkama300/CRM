@@ -149,6 +149,7 @@ export async function POST(request: Request) {
         : {
             status: "closed" as const,
             closed_at: new Date().toISOString(),
+            closed_by_user_id: userId,
             unread_count: 0,
           };
 

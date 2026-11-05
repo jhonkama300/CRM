@@ -16,6 +16,7 @@ import type {
   ConversationStatus,
   MessageTemplate,
   Profile,
+  AccountMember,
   InteractiveMessagePayload,
 } from "@/types";
 import {
@@ -33,17 +34,17 @@ import {
   PanelRightClose,
   Activity,
   DollarSign,
-  Archive,
+  Forward,
 } from "lucide-react";
 import {
   format,
   isToday,
   isYesterday,
-  differenceInHours,
   formatDistanceToNow,
 } from "date-fns";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,7 +52,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageBubble } from "./message-bubble";
 import { MessageActions } from "./message-actions";
 import { MediaLightbox } from "./media-lightbox";
@@ -82,6 +82,7 @@ import {
   templateNamesInMessages,
 } from "@/lib/whatsapp/template-message-view";
 import { contactHandle } from "@/lib/whatsapp/wa-identity";
+import { fetchAccountMembers } from "@/lib/account/members";
 import { resolveAssignmentResult } from "@/lib/inbox/assignment";
 import {
   businessReactionOn,
@@ -181,6 +182,32 @@ const STATUS_OPTIONS: { label: string; value: ConversationStatus; color: string 
   { label: "Closed", value: "closed", color: "text-muted-foreground" },
 ];
 
+function senderInitials(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("") || "?";
+}
+
+function SenderAvatar({
+  name,
+  url,
+}: {
+  name: string;
+  url?: string | null;
+}) {
+  return (
+    <Avatar className="size-7 shrink-0 border border-border">
+      {url ? <AvatarImage src={url} alt={name} /> : null}
+      <AvatarFallback className="bg-muted text-[9px] font-semibold text-foreground">
+        {senderInitials(name)}
+      </AvatarFallback>
+    </Avatar>
+  );
+}
+
 /**
  * WhatsApp-style doodle background applied to the chat area (both the
  * active thread and the empty state). The SVG tile lives at
@@ -215,7 +242,7 @@ export function MessageThread({
   const tQuote = useTranslations("Inbox.replyQuote");
   const tActivity = useTranslations("Inbox.activity");
 
-  const { user } = useAuth();
+  const { user, accountId } = useAuth();
   const router = useRouter();
   const { getPresence, getRow, now } = usePresence();
   const [loading, setLoading] = useState(false);
@@ -226,8 +253,11 @@ export function MessageThread({
   const pendingUnreadRef = useRef(0);
   const didJumpUnreadRef = useRef(false);
   const latestConversationRef = useRef(conversation);
-  const [otherTyping, setOtherTyping] = useState<string | null>(null);
+  const [otherTyping, setOtherTyping] = useState<
+    { userId: string; name: string } | null
+  >(null);
   const typingChannelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
+  const typingTimeoutRef = useRef<number | null>(null);
   const lastTypingSentRef = useRef(0);
   const [olderPages, setOlderPages] = useState<{
     conversationId: string;
@@ -236,7 +266,12 @@ export function MessageThread({
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [clock, setClock] = useState(now);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [fetchedClosedBy, setFetchedClosedBy] = useState<{ full_name: string | null; email: string | null } | null>(null);
+  const [closedBySelf, setClosedBySelf] = useState<{ conversationId: string; name: string } | null>(null);
+  const [participants, setParticipants] = useState<string[]>([]);
+  const [accountMembers, setAccountMembers] = useState<AccountMember[]>([]);
   const [profilesVersion, setProfilesVersion] = useState(0);
   const [reactions, setReactions] = useState<MessageReaction[]>([]);
   const [sentTemplates, setSentTemplates] = useState<MessageTemplate[]>([]);
@@ -339,32 +374,110 @@ export function MessageThread({
     };
   }, [profilesVersion, conversation?.id]);
 
+  useEffect(() => {
+    const closedById = conversation?.closed_by_user_id;
+    if (!closedById) {
+      setFetchedClosedBy(null);
+      return;
+    }
+    if (profiles.some((profile) => profile.user_id === closedById)) {
+      setFetchedClosedBy(null);
+      return;
+    }
+
+    let cancelled = false;
+    const supabase = createClient();
+    void supabase
+      .from("profiles")
+      .select("full_name, email")
+      .eq("user_id", closedById)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setFetchedClosedBy(data ?? null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversation?.closed_by_user_id, profiles]);
+
+  useEffect(() => {
+    const conversationId = conversation?.id;
+    if (!conversationId) {
+      setParticipants([]);
+      return;
+    }
+
+    let cancelled = false;
+    const supabase = createClient();
+    void supabase
+      .from("conversation_participants")
+      .select("user_id")
+      .eq("conversation_id", conversationId)
+      .then(({ data, error }) => {
+        if (cancelled || error) return;
+        setParticipants(
+          ((data ?? []) as { user_id: string }[]).map((row) => row.user_id),
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversation?.id]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!accountId) return;
+    let cancelled = false;
+    void fetchAccountMembers().then((members) => {
+      if (!cancelled) setAccountMembers(members);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId]);
+
   // 24-hour session timer
   const sessionInfo = useMemo(() => {
     if (!messages.length) return { expired: false, remaining: "" };
 
-    // Find last customer message
     const lastCustomerMsg = [...messages]
       .reverse()
       .find((m) => m.sender_type === "customer");
 
-    if (!lastCustomerMsg) return { expired: true, remaining: tTimer("noCustomerMessages") };
+    if (!lastCustomerMsg) {
+      return { expired: true, remaining: tTimer("noCustomerMessages") };
+    }
 
-    const hoursSince = differenceInHours(new Date(), new Date(lastCustomerMsg.created_at));
-    const expired = hoursSince >= 24;
+    const dayMs = 24 * 60 * 60 * 1000;
+    const lastAt = new Date(lastCustomerMsg.created_at).getTime();
+    const remainingMs = Math.max(
+      0,
+      Math.min(dayMs, dayMs - (clock - lastAt)),
+    );
+    const expired = remainingMs <= 0;
 
     if (expired) {
       return { expired: true, remaining: tTimer("expired") };
     }
 
-    const hoursLeft = 24 - hoursSince;
+    const totalSeconds = Math.floor(remainingMs / 1_000);
+    const hours = Math.floor(totalSeconds / 3_600);
+    const minutes = Math.floor((totalSeconds % 3_600) / 60);
+    const seconds = totalSeconds % 60;
+
     const remaining =
-      hoursLeft >= 1
-        ? tTimer("xhRemaining", { hours: Math.floor(hoursLeft) })
-        : tTimer("xmRemaining", { minutes: Math.floor(hoursLeft * 60) });
+      hours > 0
+        ? tTimer("countdownHms", { hours, minutes, seconds })
+        : tTimer("countdownMs", { minutes, seconds });
 
     return { expired, remaining };
-  }, [messages, tTimer]);
+  }, [clock, messages, tTimer]);
 
   // Store latest callback in a ref so fetchMessages doesn't need to
   // depend on `onMessagesLoaded` — otherwise parent re-renders cause
@@ -623,14 +736,27 @@ export function MessageThread({
         }) => {
           const data = payload.payload;
           if (!data?.user_id || data.user_id === user.id) return;
-          setOtherTyping(data.name || t("anotherAgent"));
-          window.setTimeout(() => setOtherTyping(null), 4000);
+          setOtherTyping({
+            userId: data.user_id,
+            name: data.name || t("anotherAgent"),
+          });
+          if (typingTimeoutRef.current) {
+            window.clearTimeout(typingTimeoutRef.current);
+          }
+          typingTimeoutRef.current = window.setTimeout(() => {
+            setOtherTyping(null);
+            typingTimeoutRef.current = null;
+          }, 4000);
         },
       )
       .subscribe();
     typingChannelRef.current = channel;
     return () => {
       typingChannelRef.current = null;
+      if (typingTimeoutRef.current) {
+        window.clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
       setOtherTyping(null);
       supabase.removeChannel(channel);
     };
@@ -683,6 +809,7 @@ export function MessageThread({
       .then(({ error }) => {
         if (error) console.error("Failed to reset unread_count:", error);
       });
+
   }, [conversationId, hasUnread]);
 
   // Auto-scroll to bottom on new messages. When the thread opened with
@@ -892,14 +1019,30 @@ export function MessageThread({
       if (!conversation) return;
 
       const supabase = createClient();
+      const closedByUserId = status === "closed" ? user?.id ?? null : null;
       await supabase
         .from("conversations")
-        .update({ status })
+        .update({
+          status,
+          closed_by_user_id: closedByUserId,
+        })
         .eq("id", conversation.id);
+
+      if (status === "closed") {
+        setClosedBySelf({
+          conversationId: conversation.id,
+          name:
+            profiles.find((profile) => profile.user_id === user?.id)?.full_name ||
+            user?.email ||
+            t("system"),
+        });
+      } else {
+        setClosedBySelf(null);
+      }
 
       onStatusChange(conversation.id, status);
     },
-    [conversation, onStatusChange]
+    [conversation, onStatusChange, profiles, t, user?.email, user?.id]
   );
 
   const handleOpenTemplates = useCallback(() => {
@@ -1155,6 +1298,39 @@ export function MessageThread({
     [conversation, onAssignChange, t],
   );
 
+  const handleAddParticipant = useCallback(
+    async (agentId: string) => {
+      if (!conversation || !accountId) return;
+
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("conversation_participants")
+        .upsert(
+          {
+            account_id: accountId,
+            conversation_id: conversation.id,
+            user_id: agentId,
+            added_by_user_id: user?.id ?? null,
+          },
+          {
+            onConflict: "conversation_id,user_id",
+            ignoreDuplicates: true,
+          },
+        );
+
+      if (error) {
+        toast.error(t("addAgentFailed"));
+        return;
+      }
+
+      setParticipants((prev) =>
+        prev.includes(agentId) ? prev : [...prev, agentId],
+      );
+      toast.success(t("agentAdded"));
+    },
+    [accountId, conversation, t, user?.id],
+  );
+
   // Empty state — same WhatsApp-style doodle background as the active
   // thread below, so swapping between empty/selected doesn't change the
   // pattern under the user's eye.
@@ -1198,10 +1374,29 @@ export function MessageThread({
       at: last.created_at,
     };
   })();
-  const currentAssignee = profiles.find((p) => p.user_id === assignedAgentId);
-  const assignLabel = assignedAgentId
-    ? (currentAssignee?.full_name ?? t("assigned"))
-    : t("assign");
+  const closedByProfile = conversation.closed_by_user_id
+    ? profiles.find((p) => p.user_id === conversation.closed_by_user_id) ??
+      fetchedClosedBy
+    : null;
+  const closedByName =
+    closedByProfile?.full_name ||
+    closedByProfile?.email ||
+    (closedBySelf?.conversationId === conversation.id
+      ? closedBySelf.name
+      : null);
+  const typingProfile = otherTyping
+    ? profiles.find((profile) => profile.user_id === otherTyping.userId) ??
+      accountMembers.find((member) => member.user_id === otherTyping.userId) ??
+      null
+    : null;
+  const transferProfiles = profiles.filter(
+    (profile) => profile.user_id !== assignedAgentId,
+  );
+  const addableProfiles = profiles.filter(
+    (profile) =>
+      profile.user_id !== assignedAgentId &&
+      !participants.includes(profile.user_id),
+  );
 
   return (
     // `min-w-0` is load-bearing: the page already puts min-w-0 on the
@@ -1229,8 +1424,16 @@ export function MessageThread({
               <ArrowLeft className="h-5 w-5" />
             </button>
           )}
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
-            {displayName.charAt(0).toUpperCase()}
+          <div className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-sm font-medium text-foreground">
+            {contact.avatar_url ? (
+              <img
+                src={contact.avatar_url}
+                alt={displayName}
+                className="h-9 w-9 rounded-full object-cover"
+              />
+            ) : (
+              displayName.charAt(0).toUpperCase()
+            )}
           </div>
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold text-foreground">{displayName}</h2>
@@ -1243,9 +1446,10 @@ export function MessageThread({
           <Badge
             variant="outline"
             className={cn(
-              "ml-1 hidden gap-1 border-border text-[10px] sm:inline-flex sm:ml-2",
+              "ml-1 mr-1 hidden gap-1 border-border text-[10px] tabular-nums sm:inline-flex sm:ml-2",
               sessionInfo.expired ? "text-red-400" : "text-primary"
             )}
+            title={tTimer("remainingTitle")}
           >
             <Clock className="h-3 w-3" />
             {sessionInfo.remaining}
@@ -1339,53 +1543,58 @@ export function MessageThread({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Assign dropdown */}
+          {/* Finalize conversation */}
+          {conversation.status !== "closed" && (
+            <button
+              type="button"
+              onClick={() => void handleStatusChange("closed")}
+              aria-label={t("finalizeConversation")}
+              title={t("finalizeConversation")}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            >
+              <Check className="h-4 w-4" />
+            </button>
+          )}
+
+          {/* Transfer conversation */}
           <DropdownMenu>
             <DropdownMenuTrigger
-              className={cn(
-                "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
-                assignedAgentId ? "text-primary" : "text-muted-foreground"
-              )}
+              aria-label={t("transferConversation")}
+              title={t("transferConversation")}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
-              <UserPlus className="h-3 w-3" />
-              <span className="hidden sm:inline">{assignLabel}</span>
-              <ChevronDown className="h-3 w-3" />
+              <Forward className="h-4 w-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="border-border bg-popover"
+              className="w-64 border-border bg-popover"
             >
-              {profiles.length === 0 ? (
+              {transferProfiles.length === 0 ? (
                 <DropdownMenuItem disabled className="text-sm text-muted-foreground">
-                  {t("noTeammates")}
+                  {t("noAgentsToTransfer")}
                 </DropdownMenuItem>
               ) : (
-                profiles.map((p) => {
-                  const isSelected = p.user_id === assignedAgentId;
-                  const presence = getPresence(p.user_id);
+                transferProfiles.map((profile) => {
+                  const presence = getPresence(profile.user_id);
                   return (
                     <DropdownMenuItem
-                      key={p.id}
-                      onClick={() => handleAssignChange(p.user_id)}
-                      className={cn(
-                        "text-sm",
-                        isSelected ? "text-primary" : "text-popover-foreground"
-                      )}
+                      key={profile.id}
+                      onClick={() => void handleAssignChange(profile.user_id)}
+                      className="text-sm text-popover-foreground"
                     >
                       <PresenceDot
                         status={presence}
                         label={presenceLabel(
                           presence,
-                          getRow(p.user_id)?.last_seen_at ?? null,
-                          now
+                          getRow(profile.user_id)?.last_seen_at ?? null,
+                          now,
                         )}
                         className="mr-2"
                       />
-                      <span className="flex-1">
-                        {p.full_name}
-                        {p.user_id === user?.id ? t("me") : ""}
+                      <span className="min-w-0 flex-1 truncate">
+                        {profile.full_name || profile.email}
+                        {profile.user_id === user?.id ? t("me") : ""}
                       </span>
-                      {isSelected && <Check className="ml-2 h-3 w-3" />}
                     </DropdownMenuItem>
                   );
                 })
@@ -1394,12 +1603,63 @@ export function MessageThread({
                 <>
                   <DropdownMenuSeparator className="bg-border" />
                   <DropdownMenuItem
-                    onClick={() => handleAssignChange(null)}
+                    onClick={() => void handleAssignChange(null)}
                     className="text-sm text-muted-foreground"
                   >
                     {t("unassign")}
                   </DropdownMenuItem>
                 </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Add agent to the conversation */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label={t("addAgent")}
+              title={t("addAgent")}
+              className="relative inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <UserPlus className="h-4 w-4" />
+              {participants.length > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-1 text-[8px] font-semibold leading-none text-primary-foreground">
+                  {participants.length}
+                </span>
+              )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="w-64 border-border bg-popover"
+            >
+              {addableProfiles.length === 0 ? (
+                <DropdownMenuItem disabled className="text-sm text-muted-foreground">
+                  {t("noAgentsToAdd")}
+                </DropdownMenuItem>
+              ) : (
+                addableProfiles.map((profile) => {
+                  const presence = getPresence(profile.user_id);
+                  return (
+                    <DropdownMenuItem
+                      key={profile.id}
+                      onClick={() => void handleAddParticipant(profile.user_id)}
+                      className="text-sm text-popover-foreground"
+                    >
+                      <PresenceDot
+                        status={presence}
+                        label={presenceLabel(
+                          presence,
+                          getRow(profile.user_id)?.last_seen_at ?? null,
+                          now,
+                        )}
+                        className="mr-2"
+                      />
+                      <span className="min-w-0 flex-1 truncate">
+                        {profile.full_name || profile.email}
+                        {profile.user_id === user?.id ? t("me") : ""}
+                      </span>
+                    </DropdownMenuItem>
+                  );
+                })
               )}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -1447,30 +1707,40 @@ export function MessageThread({
                 <Activity className="mr-2 h-3.5 w-3.5" />
                 {t("chatHistory")}
               </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-border" />
-              <DropdownMenuItem
-                onClick={() => handleStatusChange("closed")}
-                className="text-sm text-destructive"
-              >
-                <Archive className="mr-2 h-3.5 w-3.5" />
-                {t("closeConversation")}
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
 
-      {(otherTyping || recentAgentReply) && (
+      {conversation.status === "closed" && (
+        <div className="flex flex-wrap items-center justify-center gap-2 border-b border-border bg-muted/30 px-4 py-2 text-[11px] text-muted-foreground">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full border border-border bg-background text-muted-foreground">
+            <Check className="h-3 w-3" />
+          </span>
+          <span>
+            {closedByName
+              ? t("finalizedBy", { name: closedByName })
+              : t("finalizedAutomatically")}
+          </span>
+          <button
+            type="button"
+            onClick={() => void handleStatusChange("open")}
+            className="rounded-md border border-border bg-background px-2 py-0.5 text-[10px] font-medium text-foreground transition-colors hover:bg-muted"
+          >
+            {t("reopenConversation")}
+          </button>
+        </div>
+      )}
+
+      {recentAgentReply && (
         <div className="flex items-center gap-2 border-b border-amber-500/20 bg-amber-500/5 px-4 py-1.5 text-[11px] text-amber-600 dark:text-amber-300">
           <Users className="h-3 w-3" />
-          {otherTyping
-            ? t("agentTyping", { name: otherTyping })
-            : t("agentReplied", {
-                name: recentAgentReply!.name,
-                time: formatDistanceToNow(new Date(recentAgentReply!.at), {
-                  addSuffix: true,
-                }),
-              })}
+          {t("agentReplied", {
+            name: recentAgentReply.name,
+            time: formatDistanceToNow(new Date(recentAgentReply.at), {
+              addSuffix: true,
+            }),
+          })}
         </div>
       )}
 
@@ -1511,7 +1781,7 @@ export function MessageThread({
                 </div>
                 {/* Messages */}
                 <div className="space-y-2">
-                  {group.messages.map((msg) => {
+                  {group.messages.map((msg, messageIndex) => {
                     const parent = msg.reply_to_message_id
                       ? messagesById.get(msg.reply_to_message_id)
                       : null;
@@ -1524,6 +1794,38 @@ export function MessageThread({
                           preview: buildReplyPreview(parent, tQuote),
                         }
                       : null;
+                    const isAgentMessage =
+                      msg.sender_type === "agent" || msg.sender_type === "bot";
+                    const senderProfile =
+                      msg.sender_type === "agent" && msg.sender_id
+                        ? profiles.find((profile) => profile.user_id === msg.sender_id) ??
+                          accountMembers.find(
+                            (member) => member.user_id === msg.sender_id,
+                          ) ??
+                          null
+                        : null;
+                    const senderName =
+                      msg.sender_type === "customer"
+                        ? contact.name || contactHandle(contact) || t("unknown")
+                        : msg.sender_type === "bot"
+                          ? msg.ai_generated
+                            ? t("aiAssistant")
+                            : t("bot")
+                          : senderProfile?.full_name ||
+                            senderProfile?.email ||
+                            t("anotherAgent");
+                    const senderAvatarUrl =
+                      msg.sender_type === "customer"
+                        ? contact.avatar_url ?? null
+                        : senderProfile?.avatar_url ?? null;
+                    const previousMessage =
+                      messageIndex > 0 ? group.messages[messageIndex - 1] : null;
+                    const sameSender =
+                      previousMessage &&
+                      previousMessage.sender_type === msg.sender_type &&
+                      (previousMessage.sender_id ?? null) ===
+                        (msg.sender_id ?? null);
+                    const showSenderName = !sameSender;
                     const msgReactions = reactionsByMessageId.get(msg.id);
                     // Toggle is computed at the call site — no extra hook.
                     const handlePillToggle = (emoji: string) => {
@@ -1543,48 +1845,102 @@ export function MessageThread({
                             <span className="h-px flex-1 bg-primary/30" />
                           </div>
                         )}
-                        <MessageActions
-                          message={msg}
-                          onReply={() => handleStartReply(msg)}
-                          onReact={(emoji) => {
-                            if (emoji) void postReaction(msg.id, emoji);
-                          }}
+                        <div
+                          className={cn(
+                            "flex w-full items-end gap-2",
+                            isAgentMessage ? "justify-end" : "justify-start",
+                          )}
                         >
-                          <MessageBubble
-                            message={msg}
-                            template={
-                              msg.content_type === "template"
-                                ? matchMessageTemplate(msg, sentTemplates)
-                                : null
-                            }
-                            reply={reply}
-                            reactions={msgReactions}
-                            onToggleReaction={handlePillToggle}
-                            onOpenMedia={handleMediaChange}
-                            onRetry={
-                              msg.status === "failed" &&
-                              (msg.content_type === "text" ||
-                                ["image", "video", "document", "audio"].includes(
-                                  msg.content_type,
-                                ))
-                                ? () => handleRetryMessage(msg)
-                                : undefined
-                            }
-                            onRetryMedia={
-                              msg.meta_media_id &&
-                              !msg.media_url &&
-                              msg.sender_type === "customer"
-                                ? () => void handleRetryMedia(msg)
-                                : undefined
-                            }
-                          />
-                        </MessageActions>
+                          {!isAgentMessage &&
+                            (showSenderName ? (
+                              <SenderAvatar
+                                name={senderName}
+                                url={senderAvatarUrl}
+                              />
+                            ) : (
+                              <span className="w-7 shrink-0" />
+                            ))}
+                          <div className="min-w-0 flex-1">
+                            <MessageActions
+                              message={msg}
+                              onReply={() => handleStartReply(msg)}
+                              onReact={(emoji) => {
+                                if (emoji) void postReaction(msg.id, emoji);
+                              }}
+                            >
+                              <MessageBubble
+                                message={msg}
+                                template={
+                                  msg.content_type === "template"
+                                    ? matchMessageTemplate(msg, sentTemplates)
+                                    : null
+                                }
+                                reply={reply}
+                                senderName={senderName}
+                                showSenderName={showSenderName}
+                                reactions={msgReactions}
+                                onToggleReaction={handlePillToggle}
+                                onOpenMedia={handleMediaChange}
+                                onRetry={
+                                  msg.status === "failed" &&
+                                  (msg.content_type === "text" ||
+                                    [
+                                      "image",
+                                      "video",
+                                      "document",
+                                      "audio",
+                                    ].includes(msg.content_type))
+                                    ? () => handleRetryMessage(msg)
+                                    : undefined
+                                }
+                                onRetryMedia={
+                                  msg.meta_media_id &&
+                                  !msg.media_url &&
+                                  msg.sender_type === "customer"
+                                    ? () => void handleRetryMedia(msg)
+                                    : undefined
+                                }
+                              />
+                            </MessageActions>
+                          </div>
+                          {isAgentMessage &&
+                            (showSenderName ? (
+                              <SenderAvatar
+                                name={senderName}
+                                url={senderAvatarUrl}
+                              />
+                            ) : (
+                              <span className="w-7 shrink-0" />
+                            ))}
+                        </div>
                       </Fragment>
                     );
                   })}
                 </div>
               </div>
             ))}
+
+            {otherTyping && (
+              <div className="flex items-end gap-2 pt-1">
+                <SenderAvatar
+                  name={otherTyping.name}
+                  url={typingProfile?.avatar_url ?? null}
+                />
+                <div className="rounded-2xl rounded-bl-md bg-muted px-3 py-2">
+                  <p className="text-[10px] font-medium text-muted-foreground">
+                    {otherTyping.name}
+                  </p>
+                  <div
+                    className="mt-1 flex items-center gap-1"
+                    aria-label={t("agentTyping", { name: otherTyping.name })}
+                  >
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.3s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.15s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/60" />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1610,6 +1966,7 @@ export function MessageThread({
       {/* Composer */}
       <MessageComposer
         conversationId={conversation.id}
+        contact={contact}
         sessionExpired={sessionInfo.expired}
         onSend={handleSend}
         onSendMedia={handleSendMedia}

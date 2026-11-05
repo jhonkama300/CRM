@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { FileText, List, Reply } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { InteractiveMessagePayload } from "@/lib/whatsapp/interactive";
+import { FileText, List, Reply } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import type { InteractiveMessagePayload } from '@/lib/whatsapp/interactive';
 
 /**
  * WhatsApp-style read-only render of an interactive message. Used both
@@ -23,106 +23,153 @@ export interface InteractivePreviewLabels {
   button?: string;
   /** Shown in place of an empty list button label. */
   menu?: string;
+  /** Label for a request-contact-info message. */
+  contact?: string;
 }
 
 export function InteractivePreview({
   payload,
   className,
   labels,
+  neutral = false,
 }: {
   payload: InteractiveMessagePayload;
   className?: string;
   labels?: InteractivePreviewLabels;
+  neutral?: boolean;
 }) {
-  const bodyLabel = labels?.body ?? "Message body…";
-  const buttonLabel = labels?.button ?? "Button";
-  const menuLabel = labels?.menu ?? "Menu";
+  const bodyLabel = labels?.body ?? 'Message body…';
+  const buttonLabel = labels?.button ?? 'Button';
+  const menuLabel = labels?.menu ?? 'Menu';
+  const contactLabel = labels?.contact ?? 'Share contact';
   return (
     <div
       className={cn(
-        "w-full max-w-[260px] overflow-hidden rounded-lg bg-card text-foreground shadow-sm ring-1 ring-border",
-        className,
+        'bg-card text-foreground ring-border w-full max-w-[260px] overflow-hidden rounded-lg shadow-sm ring-1',
+        className
       )}
     >
-      {payload.kind === "media" ? (
-        <div className="border-b border-border">
-          {payload.header_media.type === "image" ? (
+      {payload.kind === 'audio' ? (
+        <div className="border-border border-b p-3">
+          <audio src={payload.audio_url} controls className="w-full" />
+        </div>
+      ) : null}
+      {payload.kind === 'media' ? (
+        <div className="border-border border-b">
+          {payload.header_media.type === 'image' ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={payload.header_media.url}
               alt=""
               className="max-h-44 w-full object-cover"
             />
-          ) : payload.header_media.type === "video" ? (
+          ) : payload.header_media.type === 'video' ? (
             <video
               src={payload.header_media.url}
               controls
               className="max-h-44 w-full bg-black object-contain"
             />
           ) : (
-            <div className="flex items-center gap-2 px-3 py-3 text-sm text-muted-foreground">
+            <div className="text-muted-foreground flex items-center gap-2 px-3 py-3 text-sm">
               <FileText className="h-4 w-4 shrink-0" />
-              <span className="truncate">
-                {payload.header_media.filename ?? "Document"}
+              <span className="break-words whitespace-normal">
+                {payload.header_media.filename ?? 'Document'}
               </span>
             </div>
           )}
         </div>
       ) : null}
-      <div className="px-3 py-2">
-        {payload.header ? (
-          <p className="mb-1 break-words text-sm font-semibold">
-            {payload.header}
+      {payload.kind !== 'audio' ? (
+        <div className="px-3 py-2">
+          {payload.header ? (
+            <p className="mb-1 text-sm font-semibold break-words">
+              {payload.header}
+            </p>
+          ) : null}
+          <p className="text-sm break-words whitespace-pre-wrap">
+            {payload.body || (
+              <span className="text-muted-foreground">{bodyLabel}</span>
+            )}
           </p>
-        ) : null}
-        <p className="whitespace-pre-wrap break-words text-sm">
-          {payload.body || (
-            <span className="text-muted-foreground">{bodyLabel}</span>
-          )}
-        </p>
-        {payload.footer ? (
-          <p className="mt-1 break-words text-[11px] text-muted-foreground">
-            {payload.footer}
-          </p>
-        ) : null}
-      </div>
+          {payload.footer ? (
+            <p className="text-muted-foreground mt-1 text-[11px] break-words">
+              {payload.footer}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
-      {payload.kind === "buttons" && payload.buttons.length > 0 ? (
-        <div className="flex flex-col border-t border-border">
+      {payload.kind === 'buttons' && payload.buttons.length > 0 ? (
+        <div className="border-border flex flex-col border-t">
           {payload.buttons.map((b, i) => (
             <button
               key={b.id || i}
               type="button"
               disabled
-              className="flex items-center justify-center gap-1.5 border-t border-border py-2 text-sm font-medium text-primary first:border-t-0"
+              className={cn(
+                'border-border flex items-center justify-center gap-1.5 border-t py-2 text-sm font-medium first:border-t-0',
+                neutral ? 'text-foreground' : 'text-primary'
+              )}
             >
               <Reply className="h-3.5 w-3.5" />
-              <span className="truncate">{b.title || buttonLabel}</span>
+              <span className="break-words whitespace-normal">
+                {b.title || buttonLabel}
+              </span>
             </button>
           ))}
         </div>
-      ) : payload.kind === "media" && (payload.buttons?.length ?? 0) > 0 ? (
-        <div className="flex flex-col border-t border-border">
+      ) : payload.kind === 'media' && (payload.buttons?.length ?? 0) > 0 ? (
+        <div className="border-border flex flex-col border-t">
           {payload.buttons!.map((b, i) => (
             <button
               key={b.id || i}
               type="button"
               disabled
-              className="flex items-center justify-center gap-1.5 border-t border-border py-2 text-sm font-medium text-primary first:border-t-0"
+              className={cn(
+                'border-border flex items-center justify-center gap-1.5 border-t py-2 text-sm font-medium first:border-t-0',
+                neutral ? 'text-foreground' : 'text-primary'
+              )}
             >
               <Reply className="h-3.5 w-3.5" />
-              <span className="truncate">{b.title || buttonLabel}</span>
+              <span className="break-words whitespace-normal">
+                {b.title || buttonLabel}
+              </span>
             </button>
           ))}
         </div>
-      ) : payload.kind === "list" ? (
+      ) : payload.kind === 'list' ? (
         <button
           type="button"
           disabled
-          className="flex w-full items-center justify-center gap-1.5 border-t border-border py-2 text-sm font-medium text-primary"
+          className={cn(
+            'border-border flex w-full items-center justify-center gap-1.5 border-t py-2 text-sm font-medium',
+            neutral ? 'text-foreground' : 'text-primary'
+          )}
         >
           <List className="h-3.5 w-3.5" />
-          <span className="truncate">{payload.button_label || menuLabel}</span>
+          <span className="break-words whitespace-normal">
+            {payload.button_label || menuLabel}
+          </span>
+        </button>
+      ) : payload.kind === 'cta' ? (
+        <button
+          type="button"
+          disabled
+          className="border-border text-primary flex w-full items-center justify-center gap-1.5 border-t py-2 text-sm font-medium"
+        >
+          <Reply className="h-3.5 w-3.5" />
+          <span className="break-words whitespace-normal">
+            {payload.display_text}
+          </span>
+        </button>
+      ) : payload.kind === 'request_contact_info' ? (
+        <button
+          type="button"
+          disabled
+          className="border-border text-primary flex w-full items-center justify-center gap-1.5 border-t py-2 text-sm font-medium"
+        >
+          <Reply className="h-3.5 w-3.5" />
+          <span className="break-words whitespace-normal">{contactLabel}</span>
         </button>
       ) : null}
     </div>

@@ -33,6 +33,7 @@ interface PendingStatusRow {
   error_code: number | null
   error_title: string | null
   error_details: string | null
+  status_at: string | null
 }
 
 export const PENDING_STATUS_TTL_MS = 24 * 60 * 60 * 1000
@@ -60,6 +61,7 @@ async function advanceMessages(
   rows: AccountMessage[],
   status: string,
   failure: MessageStatusFailure | null,
+  statusAt: string | null,
 ): Promise<AdvancedMessage[]> {
   const ids = rows
     .filter((row) => canAdvanceMessageStatus(row.status, status))
@@ -67,6 +69,12 @@ async function advanceMessages(
   if (ids.length === 0) return []
 
   const patch: Record<string, unknown> = { status }
+  if (status === 'delivered') {
+    patch.delivered_at = statusAt ?? new Date().toISOString()
+  }
+  if (status === 'read') {
+    patch.read_at = statusAt ?? new Date().toISOString()
+  }
   if (status === 'failed' && failure) {
     patch.error_code = failure.code
     patch.error_title = failure.title
@@ -127,7 +135,7 @@ export async function applyPendingMessageStatuses(
 
   const { data: pending, error } = await db
     .from('pending_message_statuses')
-    .select('status, error_code, error_title, error_details')
+    .select('status, error_code, error_title, error_details, status_at')
     .eq('account_id', accountId)
     .eq('wamid', wamid)
 
@@ -157,7 +165,15 @@ export async function applyPendingMessageStatuses(
             details: failed.error_details,
           }
         : null
-    advanced.push(...(await advanceMessages(db, [row], target, failure)))
+    advanced.push(
+      ...(await advanceMessages(
+        db,
+        [row],
+        target,
+        failure,
+        parked.find((p) => p.status === target)?.status_at ?? null,
+      )),
+    )
   }
 
   const { error: clearError } = await db
@@ -181,7 +197,13 @@ export async function applyMessageStatus(
   const rows = await findAccountMessages(db, accountId, incoming.wamid)
   if (!rows) return []
   if (rows.length > 0) {
-    return advanceMessages(db, rows, incoming.status, incoming.failure)
+    return advanceMessages(
+      db,
+      rows,
+      incoming.status,
+      incoming.failure,
+      incoming.statusAt,
+    )
   }
 
   await storePendingStatus(db, accountId, incoming)

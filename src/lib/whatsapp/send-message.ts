@@ -27,6 +27,8 @@ import {
   sendMediaMessage,
   sendInteractiveButtons,
   sendInteractiveList,
+  sendInteractiveCta,
+  sendRequestContactInfo,
   type MediaKind,
 } from '@/lib/whatsapp/meta-api';
 import {
@@ -121,8 +123,13 @@ export function validateSendMessageParams(params: {
   templateName?: string | null;
   interactivePayload?: InteractiveMessagePayload | null;
 }): void {
-  const { messageType, contentText, mediaUrl, templateName, interactivePayload } =
-    params;
+  const {
+    messageType,
+    contentText,
+    mediaUrl,
+    templateName,
+    interactivePayload,
+  } = params;
 
   if (!messageType) {
     throw new SendMessageError('bad_request', 'message_type is required', 400);
@@ -261,9 +268,11 @@ export async function sendMessageToConversation(
   // Resolve the channel that owns this conversation. Falls back to the
   // legacy single-number config for rows created before channels existed.
   let credentialTable: 'channels' | 'whatsapp_config' = 'whatsapp_config';
-  let config:
-    | { id: string; access_token: string; phone_number_id: string }
-    | null = null;
+  let config: {
+    id: string;
+    access_token: string;
+    phone_number_id: string;
+  } | null = null;
 
   if (conversation.channel_id) {
     const { data: channel } = await db
@@ -435,6 +444,44 @@ export async function sendMessageToConversation(
         });
         return result.messageId;
       }
+      if (p.kind === 'audio') {
+        const result = await sendMediaMessage({
+          phoneNumberId: config.phone_number_id,
+          accessToken,
+          to: phone,
+          kind: 'audio',
+          link: p.audio_url,
+          contextMessageId,
+        });
+        return result.messageId;
+      }
+      if (p.kind === 'cta') {
+        const result = await sendInteractiveCta({
+          phoneNumberId: config.phone_number_id,
+          accessToken,
+          to: phone,
+          bodyText: p.body,
+          ctaType: p.cta_type,
+          displayText: p.display_text,
+          value: p.value,
+          headerText: p.header || undefined,
+          footerText: p.footer || undefined,
+          contextMessageId,
+        });
+        return result.messageId;
+      }
+      if (p.kind === 'request_contact_info') {
+        const result = await sendRequestContactInfo({
+          phoneNumberId: config.phone_number_id,
+          accessToken,
+          to: phone,
+          bodyText: p.body,
+          headerText: p.header || undefined,
+          footerText: p.footer || undefined,
+          contextMessageId,
+        });
+        return result.messageId;
+      }
       if (p.kind === 'buttons') {
         const result = await sendInteractiveButtons({
           phoneNumberId: config.phone_number_id,
@@ -447,6 +494,9 @@ export async function sendMessageToConversation(
           contextMessageId,
         });
         return result.messageId;
+      }
+      if (p.kind !== 'list') {
+        throw new Error('Unsupported interactive quick reply type.');
       }
       const result = await sendInteractiveList({
         phoneNumberId: config.phone_number_id,
@@ -479,7 +529,9 @@ export async function sendMessageToConversation(
   try {
     // Variants only make sense for a phone number — a BSUID is opaque
     // and has exactly one correct form, so it gets a single attempt.
-    const variants = hasValidPhone ? phoneVariants(sanitizedPhone) : [sendTarget];
+    const variants = hasValidPhone
+      ? phoneVariants(sanitizedPhone)
+      : [sendTarget];
     let lastError: unknown = null;
 
     for (const variant of variants) {

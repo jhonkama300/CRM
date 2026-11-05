@@ -633,13 +633,29 @@
       "openContact": "연락처 열기",
       "openDeal": "거래 열기",
       "chatHistory": "채팅 기록",
-      "closeConversation": "대화 닫기"
+      "closeConversation": "대화 닫기",
+      "finalizeConversation": "대화 종료",
+      "system": "시스템",
+      "finalizedBy": "{name}님이 종료함",
+      "finalizedAutomatically": "시스템에서 종료함",
+      "transferConversation": "대화 전환",
+      "addAgent": "대화에 상담원 추가",
+      "noAgentsToTransfer": "사용 가능한 다른 상담원이 없습니다",
+      "noAgentsToAdd": "사용 가능한 모든 상담원이 이미 추가되었습니다",
+      "agentAdded": "대화에 상담원을 추가했습니다",
+      "addAgentFailed": "상담원을 추가하지 못했습니다",
+      "reopenConversation": "다시 열기",
+      "aiAssistant": "AI 어시스턴트",
+      "bot": "봇"
     },
     "sessionTimer": {
       "expired": "만료됨",
       "xhRemaining": "{hours}시간 남음",
       "xmRemaining": "{minutes}분 남음",
-      "noCustomerMessages": "고객 메시지 없음"
+      "noCustomerMessages": "고객 메시지 없음",
+      "countdownHms": "{hours}시간 {minutes}분 {seconds}초",
+      "countdownMs": "{minutes}분 {seconds}초",
+      "remainingTitle": "답장 가능 시간 (24시간 창)"
     },
     "composer": {
       "draftHint": "✨를 눌러 AI로 답장 초안을 작성하세요 — 보내기 전에 수정할 수 있습니다",
@@ -712,7 +728,10 @@
       "viewImage": "이미지 보기",
       "expandVideo": "동영상 확대",
       "imageAlt": "공유된 이미지",
-      "retry": "다시 시도"
+      "retry": "다시 시도",
+      "sentAt": "{time}에 전송됨",
+      "deliveredAt": "{time}에 전달됨",
+      "readAt": "{time}에 읽음"
     },
     "mediaViewer": {
       "counter": "{total}개 중 {index}번째",
@@ -847,7 +866,9 @@
       "agent": "상담원",
       "customer": "고객",
       "ai": "AI",
-      "bot": "봇"
+      "bot": "봇",
+      "closedBy": "종료한 사람",
+      "automatic": "시스템"
     }
   },
   "Contacts": {
@@ -2996,7 +3017,30 @@
       "mediaHint": "버튼이 있으면 인터랙티브 메시지로, 없으면 파일 메시지로 전송되며 푸터는 캡션에 합쳐집니다.",
       "textPlaceholder": "삽입할 메시지 텍스트",
       "cancel": "취소",
-      "save": "저장"
+      "save": "저장",
+      "previewTitle": "미리보기",
+      "previewHint": "WhatsApp에서 메시지가 도착하는 모습입니다.",
+      "previewEmpty": "메시지를 입력하면 미리보기가 표시됩니다.",
+      "previewMediaEmpty": "파일을 업로드하면 미리보기가 표시됩니다.",
+      "kindAudio": "오디오",
+      "kindCta": "CTA",
+      "kindContact": "연락처 요청",
+      "headerLabel": "헤더 (선택)",
+      "ctaType": "버튼 동작",
+      "ctaTypeUrl": "URL 열기",
+      "ctaTypeCall": "전화 걸기",
+      "ctaButtonLabel": "버튼 텍스트",
+      "contactShareLabel": "고객에게 연락처 공유 버튼이 표시됩니다.",
+      "audioHint": "오디오 파일(MP3, OGG 등)을 업로드하세요.",
+      "variablesHint": "변수 삽입:",
+      "varName": "이름",
+      "varPhone": "전화번호",
+      "varEmail": "이메일",
+      "varCompany": "회사",
+      "varUsername": "사용자 이름",
+      "ctaUrlOnly": "Meta는 대화형 CTA 메시지에 URL 버튼만 지원합니다.",
+      "deleteTitle": "빠른 답변 삭제",
+      "deleteButton": "삭제"
     },
     "health": {
       "title": "운영 상태",

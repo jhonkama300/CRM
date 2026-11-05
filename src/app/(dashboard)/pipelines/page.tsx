@@ -159,21 +159,78 @@ export default function PipelinesPage() {
 
   const handleDealMoved = useCallback(
     async (dealId: string, newStageId: string) => {
+      const deal = deals.find((item) => item.id === dealId);
+      const sortedStages = [...stages].sort((a, b) => a.position - b.position);
+      const winningStageId = sortedStages.at(-1)?.id ?? null;
+      const isWinning = winningStageId === newStageId;
+      const nextStatus =
+        isWinning
+          ? "won"
+          : deal?.status === "won"
+            ? "open"
+            : undefined;
+
       setDeals((prev) =>
-        prev.map((deal) =>
-          deal.id === dealId ? { ...deal, stage_id: newStageId } : deal,
+        prev.map((item) =>
+          item.id === dealId
+            ? {
+                ...item,
+                stage_id: newStageId,
+                ...(nextStatus ? { status: nextStatus } : {}),
+              }
+            : item,
         ),
       );
+
       const { error } = await supabase
         .from("deals")
-        .update({ stage_id: newStageId })
+        .update({
+          stage_id: newStageId,
+          ...(nextStatus ? { status: nextStatus } : {}),
+        })
         .eq("id", dealId);
+
       if (error) {
         toast.error(t("toastFailedMoveDeal"));
         refreshDeals();
+        return;
+      }
+
+      if (!isWinning || !deal) return;
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      let conversationId = deal.conversation_id ?? null;
+      if (!conversationId && deal.contact_id) {
+        const { data: conversation } = await supabase
+          .from("conversations")
+          .select("id")
+          .eq("contact_id", deal.contact_id)
+          .order("last_message_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        conversationId = conversation?.id ?? null;
+      }
+
+      if (conversationId) {
+        const { error: closeError } = await supabase
+          .from("conversations")
+          .update({
+            status: "closed",
+            closed_by_user_id: user?.id ?? null,
+          })
+          .eq("id", conversationId);
+        if (closeError) {
+          console.error(
+            "Failed to finalize conversation after winning deal:",
+            closeError.message,
+          );
+        }
       }
     },
-    [supabase, refreshDeals, t],
+    [deals, stages, supabase, refreshDeals, t],
   );
 
   const handleAddDeal = useCallback(

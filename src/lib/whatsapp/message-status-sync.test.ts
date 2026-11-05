@@ -88,8 +88,40 @@ describe('applyMessageStatus', () => {
   it('advances the row and reports it', async () => {
     const tables = { messages: [message()] }
     const advanced = await applyMessageStatus(fakeDb(tables), 'acc-1', status())
-    expect(advanced).toEqual([{ id: 'm1', conversation_id: 'c1', account_id: 'acc-1', message_id: 'wamid.1', status: 'delivered' }])
-    expect(tables.messages[0].status).toBe('delivered')
+    expect(advanced).toEqual([
+      {
+        id: 'm1',
+        conversation_id: 'c1',
+        account_id: 'acc-1',
+        message_id: 'wamid.1',
+        status: 'delivered',
+        delivered_at: '2026-10-16T10:00:00.000Z',
+      },
+    ])
+    expect(tables.messages[0]).toMatchObject({
+      status: 'delivered',
+      delivered_at: '2026-10-16T10:00:00.000Z',
+    })
+  })
+
+  it('records the read timestamp published by Meta', async () => {
+    const tables = {
+      messages: [
+        message({
+          status: 'delivered',
+          delivered_at: '2026-10-16T10:00:00.000Z',
+        }),
+      ],
+    }
+    await applyMessageStatus(
+      fakeDb(tables),
+      'acc-1',
+      status({ status: 'read', statusAt: '2026-10-16T10:05:00.000Z' }),
+    )
+    expect(tables.messages[0]).toMatchObject({
+      status: 'read',
+      read_at: '2026-10-16T10:05:00.000Z',
+    })
   })
 
   it('ignores a delivered that arrives after read', async () => {

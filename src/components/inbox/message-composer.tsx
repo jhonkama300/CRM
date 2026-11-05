@@ -57,10 +57,13 @@ import {
 import {
   interactivePayloadPreviewText,
   validateInteractivePayload,
-  type InteractiveMediaPayload,
 } from "@/lib/whatsapp/interactive";
 import { InteractivePreview } from "@/components/interactive/interactive-preview";
-import type { InteractiveMessagePayload, QuickReply } from "@/types";
+import type {
+  Contact,
+  InteractiveMessagePayload,
+  QuickReply,
+} from "@/types";
 import { QuickReplyPicker } from "./quick-reply-picker";
 
 /** Media content types an agent can send from the composer. */
@@ -144,6 +147,7 @@ interface MediaDraft {
 
 interface MessageComposerProps {
   conversationId: string;
+  contact?: Contact | null;
   sessionExpired: boolean;
   onSend: (text: string, replyToId?: string) => void;
   onSendMedia: (payload: SendMediaPayload) => void;
@@ -161,6 +165,23 @@ function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+/** Fill the supported quick-reply variables from the conversation contact. */
+function resolveQuickReplyVariables(value: string, contact?: Contact | null) {
+  if (!value.includes("{{")) return value;
+  const vars: Record<string, string> = {
+    name: contact?.name ?? "",
+    phone: contact?.phone ?? "",
+    email: contact?.email ?? "",
+    company: contact?.company ?? "",
+    username: contact?.wa_username ? `@${contact.wa_username}` : "",
+    bsuid: contact?.wa_user_id ?? "",
+  };
+  return value.replace(
+    /\{\{\s*([a-zA-Z_]+)\s*\}\}/g,
+    (match, key: string) => vars[key.toLowerCase()] ?? match,
+  );
+}
+
 /** Worker that encodes mic input to Ogg/Opus entirely in the browser
  *  (vendored from opus-recorder into /public). Recording client-side in a
  *  Meta-accepted format means no server ffmpeg / transcode step. */
@@ -176,6 +197,7 @@ function normalizeSlash(value: string): string {
 
 export function MessageComposer({
   conversationId,
+  contact,
   sessionExpired,
   onSend,
   onSendMedia,
@@ -227,7 +249,7 @@ export function MessageComposer({
   // Interactive-message builder dialog + quick-reply picker.
   const [interactiveOpen, setInteractiveOpen] = useState(false);
   const [mediaQuickReply, setMediaQuickReply] =
-    useState<InteractiveMediaPayload | null>(null);
+    useState<InteractiveMessagePayload | null>(null);
   const [interactivePayload, setInteractivePayload] =
     useState<InteractiveMessagePayload>(blankButtonsPayload);
   const [savingQuickReply, setSavingQuickReply] = useState(false);
@@ -465,14 +487,17 @@ export function MessageComposer({
       setQuickReplyOpen(false);
       setSlash(null);
       if (qr.kind === "interactive" && qr.interactive_payload) {
-        if (qr.interactive_payload.kind === "media") {
-          setMediaQuickReply(qr.interactive_payload as InteractiveMediaPayload);
+        if (
+          qr.interactive_payload.kind !== "buttons" &&
+          qr.interactive_payload.kind !== "list"
+        ) {
+          setMediaQuickReply(qr.interactive_payload);
           return;
         }
         openInteractiveBuilder(qr.interactive_payload);
         return;
       }
-      const body = qr.content_text ?? "";
+      const body = resolveQuickReplyVariables(qr.content_text ?? "", contact);
       // Separate the snippet from any existing draft with a newline so the
       // words don't run together ("Thanks" + "we'll…" → "Thankswe'll…").
       setText((prev) =>
@@ -487,7 +512,7 @@ export function MessageComposer({
         }
       });
     },
-    [openInteractiveBuilder, adjustHeight],
+    [openInteractiveBuilder, adjustHeight, contact],
   );
 
   // Replace the active `/query` token with the chosen quick reply.
@@ -504,7 +529,7 @@ export function MessageComposer({
         return;
       }
 
-      const body = qr.content_text ?? "";
+      const body = resolveQuickReplyVariables(qr.content_text ?? "", contact);
       const next = `${before}${body}${after}`;
       setText(next);
       requestAnimationFrame(() => {
@@ -517,7 +542,7 @@ export function MessageComposer({
         }
       });
     },
-    [adjustHeight, handlePickQuickReply, slash, text],
+    [adjustHeight, contact, handlePickQuickReply, slash, text],
   );
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {

@@ -633,13 +633,29 @@
       "openContact": "Open contact",
       "openDeal": "Open a deal",
       "chatHistory": "Chat history",
-      "closeConversation": "Close conversation"
+      "closeConversation": "Close conversation",
+      "finalizeConversation": "Finalize conversation",
+      "system": "System",
+      "finalizedBy": "Finalized by {name}",
+      "finalizedAutomatically": "Finalized by the system",
+      "transferConversation": "Transfer conversation",
+      "addAgent": "Add agent to conversation",
+      "noAgentsToTransfer": "No other agents available",
+      "noAgentsToAdd": "All available agents are already added",
+      "agentAdded": "Agent added to conversation",
+      "addAgentFailed": "Could not add the agent",
+      "reopenConversation": "Reopen",
+      "aiAssistant": "AI assistant",
+      "bot": "Bot"
     },
     "sessionTimer": {
       "expired": "Expired",
       "xhRemaining": "{hours}h remaining",
       "xmRemaining": "{minutes}m remaining",
-      "noCustomerMessages": "No customer messages"
+      "noCustomerMessages": "No customer messages",
+      "countdownHms": "{hours}h {minutes}m {seconds}s",
+      "countdownMs": "{minutes}m {seconds}s",
+      "remainingTitle": "Time left to reply (24h window)"
     },
     "composer": {
       "draftHint": "Tap the ✨ to draft a reply with AI — you can edit it before sending",
@@ -712,7 +728,10 @@
       "viewImage": "View image",
       "expandVideo": "Expand video",
       "imageAlt": "Shared image",
-      "retry": "Retry"
+      "retry": "Retry",
+      "sentAt": "Sent at {time}",
+      "deliveredAt": "Delivered at {time}",
+      "readAt": "Read at {time}"
     },
     "mediaViewer": {
       "counter": "{index} of {total}",
@@ -847,7 +866,9 @@
       "agent": "Agent",
       "customer": "Customer",
       "ai": "AI",
-      "bot": "Bot"
+      "bot": "Bot",
+      "closedBy": "Finalized by",
+      "automatic": "System"
     }
   },
   "Contacts": {
@@ -2996,7 +3017,30 @@
       "mediaHint": "With buttons it sends as an interactive message; without buttons it sends as a media message and the footer joins the caption.",
       "textPlaceholder": "The message text to insert",
       "cancel": "Cancel",
-      "save": "Save"
+      "save": "Save",
+      "previewTitle": "Preview",
+      "previewHint": "This is how the message arrives on WhatsApp.",
+      "previewEmpty": "Write a message to see the preview.",
+      "previewMediaEmpty": "Upload a file to see the preview.",
+      "kindAudio": "Audio",
+      "kindCta": "CTA",
+      "kindContact": "Request contact",
+      "headerLabel": "Header (optional)",
+      "ctaType": "Button action",
+      "ctaTypeUrl": "Open URL",
+      "ctaTypeCall": "Call number",
+      "ctaButtonLabel": "Button label",
+      "contactShareLabel": "The customer will see a “Share contact” button.",
+      "audioHint": "Upload an audio file (MP3, OGG, etc.).",
+      "variablesHint": "Insert variable:",
+      "varName": "Name",
+      "varPhone": "Phone",
+      "varEmail": "Email",
+      "varCompany": "Company",
+      "varUsername": "Username",
+      "ctaUrlOnly": "Only URL buttons are supported by Meta for interactive CTA messages.",
+      "deleteTitle": "Delete quick reply",
+      "deleteButton": "Delete"
     },
     "health": {
       "title": "Operational health",
