@@ -288,6 +288,41 @@ export async function sendMessageToConversation(
   }
 
   if (!config) {
+    // Legacy conversations were created before channels existed and
+    // still have `channel_id = null`. Use the account's default channel
+    // (oldest, preferring one seeded from whatsapp_config) so those
+    // threads keep sending without a legacy config row.
+    const { data: defaultChannel } = await db
+      .from('channels')
+      .select('id, access_token, phone_number_id')
+      .eq('account_id', accountId)
+      .order('source_config_id', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (defaultChannel) {
+      credentialTable = 'channels';
+      config = defaultChannel;
+      if (!conversation.channel_id) {
+        void db
+          .from('conversations')
+          .update({ channel_id: defaultChannel.id })
+          .eq('id', conversationId)
+          .eq('account_id', accountId)
+          .then(({ error }: { error: unknown }) => {
+            if (error) {
+              console.warn(
+                '[send-message] conversation channel backfill failed:',
+                (error as { message?: string })?.message ?? error,
+              );
+            }
+          });
+      }
+    }
+  }
+
+  if (!config) {
     const { data: legacyConfig, error: configError } = await db
       .from('whatsapp_config')
       .select('*')

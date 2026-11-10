@@ -181,6 +181,12 @@ export function DealForm({
     }
     setSaving(true);
 
+    const selectedStage = stages.find((stage) => stage.id === stageId);
+    const stageStatus =
+      selectedStage?.stage_type === "closing"
+        ? selectedStage.closing_outcome
+        : null;
+
     const payload = {
       title: title.trim(),
       contact_id: contactId,
@@ -189,6 +195,7 @@ export function DealForm({
       assigned_to: assignedTo || null,
       notes: notes.trim() || null,
       expected_close_date: expectedCloseDate || null,
+      ...(stageStatus ? { status: stageStatus } : {}),
     };
 
     if (deal) {
@@ -224,7 +231,7 @@ export function DealForm({
           account_id: accountId,
           value: 0,
           currency: defaultCurrency,
-          status: "open",
+          status: stageStatus ?? "open",
         });
       if (error) {
         toast.error(t("toastFailedCreate"));

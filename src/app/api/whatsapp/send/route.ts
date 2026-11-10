@@ -222,12 +222,22 @@ async function findOrCreateConversation(
   const existingId = await findExisting()
   if (existingId) return existingId
 
+  const { data: defaultChannel } = await supabase
+    .from('channels')
+    .select('id')
+    .eq('account_id', accountId)
+    .order('source_config_id', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
   const { data: created, error } = await supabase
     .from('conversations')
     .insert({
       account_id: accountId,
       user_id: userId,
       contact_id: contactId,
+      channel_id: defaultChannel?.id ?? null,
     })
     .select('id')
     .single()

@@ -19,7 +19,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { sendTemplateMessage } from '@/lib/whatsapp/meta-api';
-import { decrypt } from '@/lib/whatsapp/encryption';
+import { loadAccountMetaCredentials } from '@/lib/whatsapp/account-credentials';
 import {
   parseInternationalPhone,
   phoneVariants,
@@ -115,19 +115,17 @@ export async function createBroadcast(
 
   // Config (fail fast + provides the audit trail owner already resolved
   // by the caller). Meta send needs phone_number_id + decrypted token.
-  const { data: config, error: configError } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', accountId)
-    .single();
-  if (configError || !config) {
+  let credentials
+  try {
+    credentials = await loadAccountMetaCredentials(db, accountId)
+  } catch {
     throw new BroadcastError(
       'whatsapp_not_configured',
       'WhatsApp not configured. Please set up your WhatsApp integration first.',
       400
     );
   }
-  const accessToken = decrypt(config.access_token);
+  const accessToken = credentials.accessToken;
 
   // Template row (once) for header/button components; guard a
   // malformed local row rather than N identical opaque failures.
@@ -247,7 +245,7 @@ export async function createBroadcast(
     broadcastId,
     templateName,
     templateLanguage: resolvedTemplate.language,
-    phoneNumberId: config.phone_number_id,
+    phoneNumberId: credentials.phoneNumberId,
     accessToken,
     templateRow,
     planned,

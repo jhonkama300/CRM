@@ -166,13 +166,22 @@ export async function GET(request: Request) {
       )
     }
 
-    // Fetch all whatsapp configs to check verify tokens
-    const { data: configs, error: configError } = await supabaseAdmin()
-      .from('whatsapp_config')
-      .select('id, verify_token')
+    // Channels are the source of truth for multi-number setups; keep
+    // reading whatsapp_config too for deployments mid-migration.
+    const [
+      { data: configs, error: configError },
+      { data: channels, error: channelError },
+    ] = await Promise.all([
+      supabaseAdmin()
+        .from('whatsapp_config')
+        .select('id, verify_token'),
+      supabaseAdmin()
+        .from('channels')
+        .select('id, verify_token'),
+    ])
 
-    if (configError || !configs) {
-      console.error('Error fetching configs for verification:', configError)
+    if ((configError || !configs) && (channelError || !channels)) {
+      console.error('Error fetching verify tokens:', configError, channelError)
       return NextResponse.json(
         { error: 'Verification failed' },
         { status: 403 }
@@ -184,7 +193,10 @@ export async function GET(request: Request) {
     // GCM if it was still in the legacy CBC format.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let matchedConfig: any = null
-    for (const config of configs) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let matchedChannel: any = null
+
+    for (const config of configs ?? []) {
       if (!config.verify_token) continue
       try {
         if (verifyTokenMatches(decrypt(config.verify_token), verifyToken)) {
@@ -196,10 +208,24 @@ export async function GET(request: Request) {
       }
     }
 
-    if (matchedConfig) {
+    if (!matchedConfig) {
+      for (const channel of channels ?? []) {
+        if (!channel.verify_token) continue
+        try {
+          if (verifyTokenMatches(decrypt(channel.verify_token), verifyToken)) {
+            matchedChannel = channel
+            break
+          }
+        } catch {
+          // Malformed / wrong-key token row — skip it and keep checking.
+        }
+      }
+    }
+
+    if (matchedConfig || matchedChannel) {
       // Fire-and-forget GCM upgrade. Safe to run on every subscribe
       // since it's a no-op once the column is already GCM.
-      if (isLegacyFormat(matchedConfig.verify_token)) {
+      if (matchedConfig && isLegacyFormat(matchedConfig.verify_token)) {
         void supabaseAdmin()
           .from('whatsapp_config')
           .update({ verify_token: encrypt(verifyToken) })
@@ -288,6 +314,27 @@ async function resolveAccountForPhoneNumber(
   phoneNumberId: string | undefined
 ): Promise<string | null> {
   if (!phoneNumberId) return null
+
+  const { data: channels, error: channelError } = await supabaseAdmin()
+    .from('channels')
+    .select('account_id')
+    .eq('phone_number_id', phoneNumberId)
+
+  if (channelError) {
+    console.error(
+      'Error resolving channel for status update:',
+      phoneNumberId,
+      channelError,
+    )
+  } else if (channels && channels.length === 1) {
+    return channels[0].account_id as string
+  } else if (channels && channels.length > 1) {
+    console.error(
+      `Status update for phone_number_id ${phoneNumberId} matched ${channels.length} channels; message statuses skipped`,
+    )
+    return null
+  }
+
   const { data, error } = await supabaseAdmin()
     .from('whatsapp_config')
     .select('account_id')
@@ -299,7 +346,7 @@ async function resolveAccountForPhoneNumber(
   }
   if (!data || data.length !== 1) {
     console.error(
-      `Status update for phone_number_id ${phoneNumberId} matched ${data?.length ?? 0} configs; message statuses skipped`
+      `Status update for phone_number_id ${phoneNumberId} matched ${data?.length ?? 0} configs; message statuses skipped`,
     )
     return null
   }

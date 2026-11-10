@@ -57,19 +57,30 @@ export async function resolveConversationByPhone(
     );
   }
 
-  // Fail fast (and create nothing) when the account has no WhatsApp
-  // connected — the same error the send would raise anyway.
-  const { data: config } = await db
-    .from('whatsapp_config')
+  // New conversations belong to the account's default channel. Only
+  // fall back to the legacy single-number config when no channel exists.
+  const { data: channel } = await db
+    .from('channels')
     .select('id')
     .eq('account_id', accountId)
+    .order('source_config_id', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: true })
+    .limit(1)
     .maybeSingle();
-  if (!config) {
-    throw new SendMessageError(
-      'whatsapp_not_configured',
-      'WhatsApp not configured. Please set up your WhatsApp integration first.',
-      400
-    );
+
+  if (!channel) {
+    const { data: config } = await db
+      .from('whatsapp_config')
+      .select('id')
+      .eq('account_id', accountId)
+      .maybeSingle();
+    if (!config) {
+      throw new SendMessageError(
+        'whatsapp_not_configured',
+        'WhatsApp not configured. Please set up your WhatsApp integration first.',
+        400
+      );
+    }
   }
 
   // Audit user for created rows = the single account-wide default used
@@ -144,7 +155,8 @@ export async function resolveConversationByPhone(
     db,
     accountId,
     contactId,
-    ownerUserId
+    ownerUserId,
+    channel?.id ?? null
   );
 
   return {
@@ -165,7 +177,8 @@ async function findOrCreateConversationRow(
   db: SupabaseClient,
   accountId: string,
   contactId: string,
-  ownerUserId: string
+  ownerUserId: string,
+  channelId: string | null
 ): Promise<{ id: string; created: boolean }> {
   const { data: existing, error: findErr } = await db
     .from('conversations')
@@ -190,6 +203,7 @@ async function findOrCreateConversationRow(
       account_id: accountId,
       user_id: ownerUserId,
       contact_id: contactId,
+      channel_id: channelId,
     })
     .select('id')
     .single();

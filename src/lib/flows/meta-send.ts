@@ -8,7 +8,7 @@ import {
   type MediaKind,
 } from '@/lib/whatsapp/meta-api'
 import type { InteractiveMessagePayload } from '@/lib/whatsapp/interactive'
-import { decrypt } from '@/lib/whatsapp/encryption'
+import { loadAccountMetaCredentials as loadAccountMetaCredentialsShared } from '@/lib/whatsapp/account-credentials'
 import {
   phoneVariants,
   isRecipientNotAllowedError,
@@ -45,17 +45,10 @@ export async function loadAccountMetaCredentials(
   db: ReturnType<typeof supabaseAdmin>,
   accountId: string,
 ): Promise<{ phoneNumberId: string; accessToken: string }> {
-  const { data: config, error: configErr } = await db
-    .from('whatsapp_config')
-    .select('phone_number_id, access_token')
-    .eq('account_id', accountId)
-    .single()
-  if (configErr || !config) {
-    throw new Error(t('send.notConfigured'))
-  }
+  const credentials = await loadAccountMetaCredentialsShared(db, accountId)
   return {
-    phoneNumberId: config.phone_number_id,
-    accessToken: decrypt(config.access_token),
+    phoneNumberId: credentials.phoneNumberId,
+    accessToken: credentials.accessToken,
   }
 }
 

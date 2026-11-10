@@ -107,21 +107,21 @@ export function DealCard({
         }
       }}
       className={cn(
-        "group relative w-full cursor-pointer overflow-hidden rounded-lg border border-border bg-card text-left shadow-sm transition-all",
-        isOverlay
-          ? "shadow-xl"
-          : "hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-[0_8px_24px_-12px_rgba(139,92,246,0.35)]",
+        "group relative w-full cursor-pointer overflow-hidden rounded-lg border border-border/80 bg-card text-left transition-colors",
+        isOverlay ? "shadow-xl" : "hover:border-foreground/20",
       )}
     >
-      <span
-        aria-hidden
-        className="absolute inset-y-0 left-0 w-1"
-        style={{ backgroundColor: stage?.color ?? "#94a3b8" }}
-      />
-
-      <div className="py-2.5 pl-3.5 pr-2.5">
+      <div className="p-3">
         <div className="flex items-start gap-1.5">
-          <h4 className="min-w-0 flex-1 text-[12.5px] font-semibold leading-snug text-foreground break-words">
+          <span
+            aria-hidden
+            className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+            style={{
+              backgroundColor: stage?.color ?? "#94a3b8",
+              boxShadow: `0 0 0 2px ${(stage?.color ?? "#94a3b8")}22`,
+            }}
+          />
+          <h4 className="min-w-0 flex-1 text-[13px] font-semibold leading-snug text-foreground break-words">
             {deal.title}
           </h4>
           <GripVertical

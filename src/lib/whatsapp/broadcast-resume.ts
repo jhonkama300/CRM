@@ -24,7 +24,7 @@ import {
 } from '@/lib/whatsapp/broadcast-core';
 import { DELIVERY_LOCK_STALE_MS } from '@/lib/whatsapp/broadcast-delivery-lease';
 import { chunk } from '@/lib/supabase/paged-query';
-import { decrypt } from '@/lib/whatsapp/encryption';
+import { loadAccountMetaCredentials } from '@/lib/whatsapp/account-credentials';
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
 import { resolveContactSendTarget } from '@/lib/whatsapp/wa-identity';
 
@@ -238,12 +238,10 @@ export async function planBroadcastResume(
     );
   }
 
-  const { data: config, error: configError } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', accountId)
-    .single();
-  if (configError || !config) {
+  let credentials
+  try {
+    credentials = await loadAccountMetaCredentials(db, accountId)
+  } catch {
     throw new BroadcastError(
       'whatsapp_not_configured',
       'WhatsApp not configured. Please set up your WhatsApp integration first.',
@@ -269,8 +267,8 @@ export async function planBroadcastResume(
     broadcastId,
     templateName: broadcast.template_name,
     templateLanguage: resolvedTemplate.language,
-    phoneNumberId: config.phone_number_id,
-    accessToken: decrypt(config.access_token),
+    phoneNumberId: credentials.phoneNumberId,
+    accessToken: credentials.accessToken,
     templateRow: resolvedTemplate.row,
     planned: slice.flatMap((row) => {
       const target = contactTarget(row);

@@ -5,7 +5,7 @@ import {
   requireRole,
   toErrorResponse,
 } from '@/lib/auth/account'
-import { decrypt } from '@/lib/whatsapp/encryption'
+import { loadAccountMetaCredentials } from '@/lib/whatsapp/account-credentials'
 import {
   deleteMessageTemplate,
   editMessageTemplate,
@@ -145,18 +145,16 @@ export async function PATCH(
     }
 
     if (!isDryRun()) {
-      const { data: config, error: configError } = await supabase
-        .from('whatsapp_config')
-        .select('*')
-        .eq('account_id', accountId)
-        .single()
-      if (configError || !config) {
+      let credentials
+      try {
+        credentials = await loadAccountMetaCredentials(supabase, accountId)
+      } catch {
         return NextResponse.json(
           { error: t('common.whatsappNotConfiguredDot') },
           { status: 400 },
         )
       }
-      const accessToken = decrypt(config.access_token)
+      const accessToken = credentials.accessToken
 
       // Media headers (image/video/document) need a fresh Resumable-Upload
       // handle on every edit (Meta replaces components wholesale). Derive
@@ -245,11 +243,12 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await context.params
+    const localOnly = new URL(request.url).searchParams.get("local_only") === "1"
     if (!UUID_RE.test(id)) {
       return NextResponse.json(
         { error: t('templates.invalidId') },
@@ -273,22 +272,26 @@ export async function DELETE(
       return NextResponse.json({ error: t('templates.notFound') }, { status: 404 })
     }
 
-    if (existing.meta_template_id && !isDryRun()) {
-      const { data: config, error: configError } = await supabase
-        .from('whatsapp_config')
-        .select('*')
-        .eq('account_id', accountId)
-        .single()
-      if (configError || !config || !config.waba_id) {
+    if (existing.meta_template_id && !isDryRun() && !localOnly) {
+      let credentials
+      try {
+        credentials = await loadAccountMetaCredentials(supabase, accountId)
+      } catch {
         return NextResponse.json(
           { error: t('templates.notConfiguredDelete') },
           { status: 400 },
         )
       }
-      const accessToken = decrypt(config.access_token)
+      if (!credentials.wabaId) {
+        return NextResponse.json(
+          { error: t('templates.notConfiguredDelete') },
+          { status: 400 },
+        )
+      }
+      const accessToken = credentials.accessToken
       try {
         await deleteMessageTemplate({
-          wabaId: config.waba_id,
+          wabaId: credentials.wabaId,
           accessToken,
           name: existing.name,
           metaTemplateId: existing.meta_template_id,

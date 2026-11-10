@@ -49,3 +49,4 @@ supabase/.temp/
 # local agent/browser tooling
 .agents/
 .playwright-cli/
+.stitch/

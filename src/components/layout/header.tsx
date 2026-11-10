@@ -206,7 +206,7 @@ export function Header({ onOpenSidebar }: HeaderProps) {
                   {t('menuProfile')}
                 </button>
                 <Link
-                  href="/settings?tab=whatsapp"
+                  href="/settings?tab=channels"
                   onClick={() => setAccountOpen(false)}
                   className="text-popover-foreground hover:bg-muted flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors"
                 >

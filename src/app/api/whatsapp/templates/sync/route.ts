@@ -5,7 +5,7 @@ import {
   requireRole,
   toErrorResponse,
 } from '@/lib/auth/account'
-import { decrypt } from '@/lib/whatsapp/encryption'
+import { loadAccountMetaCredentials } from '@/lib/whatsapp/account-credentials'
 import { normalizeStatus } from '@/lib/whatsapp/template-status-normalize'
 import type { TemplateButton, TemplateSampleValues } from '@/types'
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
@@ -142,13 +142,10 @@ export async function POST() {
     const limit = checkRateLimit(`whatsapp-admin:${userId}`, RATE_LIMITS.whatsappAdmin)
     if (!limit.success) return rateLimitResponse(limit)
 
-    const { data: config, error: configError } = await supabase
-      .from('whatsapp_config')
-      .select('*')
-      .eq('account_id', accountId)
-      .single()
-
-    if (configError || !config) {
+    let credentials
+    try {
+      credentials = await loadAccountMetaCredentials(supabase, accountId)
+    } catch {
       return NextResponse.json(
         {
           error:
@@ -158,7 +155,7 @@ export async function POST() {
       )
     }
 
-    if (!config.waba_id) {
+    if (!credentials.wabaId) {
       return NextResponse.json(
         {
           error:
@@ -168,12 +165,12 @@ export async function POST() {
       )
     }
 
-    const accessToken = decrypt(config.access_token)
+    const accessToken = credentials.accessToken
 
     const metaTemplates: MetaTemplate[] = []
     let nextUrl:
       | string
-      | null = `${META_API_BASE}/${config.waba_id}/message_templates?limit=100&fields=id,name,language,status,category,components,quality_score`
+      | null = `${META_API_BASE}/${credentials.wabaId}/message_templates?limit=100&fields=id,name,language,status,category,components,quality_score`
     const PAGE_CAP = 20
     let pageCount = 0
 

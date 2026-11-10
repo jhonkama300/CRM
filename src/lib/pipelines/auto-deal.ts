@@ -39,6 +39,7 @@ export async function ensureChannelDeal(
     .from('pipeline_stages')
     .select('id')
     .eq('pipeline_id', pipeline.id)
+    .eq('stage_type', 'start')
     .order('position', { ascending: true })
     .limit(1)
     .maybeSingle()

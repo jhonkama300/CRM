@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { validateChannelCredentials } from '@/lib/whatsapp/channel-validation';
 import { getPhoneNumberHealth } from '@/lib/whatsapp/meta-api';
@@ -9,10 +10,11 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function POST(_request: Request, { params }: Params) {
   try {
-    const { supabase, accountId } = await requireRole('admin');
+    const { accountId } = await requireRole('admin');
+    const admin = supabaseAdmin();
     const { id } = await params;
 
-    const { data: channel } = await supabase
+    const { data: channel } = await admin
       .from('channels')
       .select('id, phone_number_id, waba_id, access_token')
       .eq('id', id)
@@ -43,7 +45,7 @@ export async function POST(_request: Request, { params }: Params) {
         // should not be reported as a failed test just because the
         // optional health read timed out.
       }
-      await supabase
+      await admin
         .from('channels')
         .update({
           status: 'connected',
@@ -59,7 +61,7 @@ export async function POST(_request: Request, { params }: Params) {
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Channel validation failed';
-      await supabase
+      await admin
         .from('channels')
         .update({
           status: 'disconnected',

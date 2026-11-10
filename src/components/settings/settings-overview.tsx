@@ -141,21 +141,29 @@ export function SettingsOverview({
     // WhatsApp connection status — slower, independent.
     (async () => {
       setWhatsappLoading(true);
-      const [row, health] = await Promise.allSettled([
+      const [row, channelRows, health] = await Promise.allSettled([
         supabase
           .from('whatsapp_config')
           .select('phone_number_id')
           .eq('account_id', acctId)
           .maybeSingle(),
+        supabase.from('channels').select('status').eq('account_id', acctId),
         fetch('/api/whatsapp/config', { cache: 'no-store' }).then((r) =>
           r.json()
         ),
       ]);
       if (cancelled) return;
+      const channels =
+        channelRows.status === 'fulfilled'
+          ? (channelRows.value.data ?? [])
+          : [];
       setWhatsapp({
         configured:
-          row.status === 'fulfilled' && !!row.value.data?.phone_number_id,
-        connected: health.status === 'fulfilled' && !!health.value?.connected,
+          channels.length > 0 ||
+          (row.status === 'fulfilled' && !!row.value.data?.phone_number_id),
+        connected:
+          channels.some((channel) => channel.status === 'connected') ||
+          (health.status === 'fulfilled' && !!health.value?.connected),
       });
       setWhatsappLoading(false);
     })();
@@ -184,7 +192,7 @@ export function SettingsOverview({
     subtitle: ReactNode;
   }[] = [
     {
-      section: 'whatsapp',
+      section: 'channels',
       loading: whatsappLoading,
       subtitle: !whatsapp?.configured ? (
         t('notSetup')

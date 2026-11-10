@@ -117,6 +117,9 @@ export function OrganizationPanel({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [view, setView] = useState<'canvas' | 'list'>('canvas');
   const [structureOpen, setStructureOpen] = useState(fullscreenOnly);
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<
+    string | null
+  >(null);
 
   const [deptDialogOpen, setDeptDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Department | null>(null);
@@ -307,6 +310,9 @@ export function OrganizationPanel({
         .eq('id', deleteTarget.id);
       if (error) throw error;
       toast.success(t('deleted'));
+      if (selectedDepartmentId === deleteTarget.id) {
+        setSelectedDepartmentId(null);
+      }
       setDeleteTarget(null);
       await fetchData();
     } catch (err) {
@@ -314,7 +320,7 @@ export function OrganizationPanel({
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, fetchData, supabase, t]);
+  }, [deleteTarget, fetchData, selectedDepartmentId, supabase, t]);
 
   const openAddMember = useCallback(
     (department: Department) => {
@@ -813,6 +819,10 @@ export function OrganizationPanel({
               onInvite={setInviteDepartment}
               invitationsByDepartment={invitesByDepartment}
               onPositionChange={savePosition}
+              onSelectDepartment={(department) =>
+                setSelectedDepartmentId(department?.id ?? null)
+              }
+              selectedDepartmentId={selectedDepartmentId}
             />
           ) : roots.length === 0 ? (
             <div className="border-border flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
@@ -1200,6 +1210,9 @@ export function OrganizationPanel({
                     onInvite={setInviteDepartment}
                     invitationsByDepartment={invitesByDepartment}
                     onPositionChange={savePosition}
+                    onSelectDepartment={(department) =>
+                      setSelectedDepartmentId(department?.id ?? null)
+                    }
                     className="h-full border-0"
                     fitMinZoom={0.55}
                     showAddButton={false}
@@ -1275,6 +1288,11 @@ export function OrganizationPanel({
                 departments={departments}
                 memberships={memberships}
                 pendingInvites={invitations.length}
+                accountId={accountId ?? ""}
+                canEdit={canEdit}
+                selectedDepartmentId={selectedDepartmentId}
+                onClearDepartmentFilter={() => setSelectedDepartmentId(null)}
+                onChanged={() => void fetchData()}
               />
             </aside>
           </div>

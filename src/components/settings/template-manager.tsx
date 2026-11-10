@@ -502,7 +502,7 @@ export function TemplateManager() {
     }
   }
 
-  async function confirmDelete() {
+  async function confirmDelete(localOnly = false) {
     const target = templateToDelete;
     if (!target || deletingId) return;
     setDeletingId(target.id);
@@ -510,9 +510,12 @@ export function TemplateManager() {
       // Route handler scopes the Meta delete via hsm_id (so sibling
       // language variants survive) and falls through to remove the
       // local row. Local-only rows skip the Meta call.
-      const res = await fetch(`/api/whatsapp/templates/${target.id}`, {
-        method: 'DELETE',
-      });
+      const res = await fetch(
+        `/api/whatsapp/templates/${target.id}${localOnly ? '?local_only=1' : ''}`,
+        {
+          method: 'DELETE',
+        },
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(
@@ -1606,8 +1609,19 @@ export function TemplateManager() {
             >
               {t('cancel')}
             </Button>
+            {templateToDelete?.meta_template_id ? (
+              <Button
+                variant="outline"
+                onClick={() => void confirmDelete(true)}
+                disabled={deletingId !== null}
+                title={t('deleteLocalOnlyDesc')}
+                className="border-border text-muted-foreground hover:bg-muted"
+              >
+                {t('deleteLocalOnly')}
+              </Button>
+            ) : null}
             <Button
-              onClick={confirmDelete}
+              onClick={() => void confirmDelete()}
               disabled={deletingId !== null}
               className="bg-red-600 text-white hover:bg-red-700"
             >

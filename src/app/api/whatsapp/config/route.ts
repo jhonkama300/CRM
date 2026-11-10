@@ -511,7 +511,7 @@ export async function POST(request: Request) {
     }
 
     if (existing) {
-      const { error: updateError } = await supabase
+      const { error: updateError } = await supabaseAdmin()
         .from('whatsapp_config')
         .update(baseRow)
         .eq('account_id', accountId)
@@ -528,7 +528,7 @@ export async function POST(request: Request) {
       // (NOT NULL post-017, UNIQUE so duplicates trip the constraint
       // up-front), `user_id` is the audit column identifying which
       // member of the account saved the config.
-      const { error: insertError } = await supabase
+      const { error: insertError } = await supabaseAdmin()
         .from('whatsapp_config')
         .insert({
           account_id: accountId,
@@ -602,9 +602,9 @@ export async function POST(request: Request) {
  */
 export async function DELETE() {
   try {
-    const { supabase, accountId } = await requireRole('admin')
+    const { accountId } = await requireRole('admin')
 
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await supabaseAdmin()
       .from('whatsapp_config')
       .delete()
       .eq('account_id', accountId)

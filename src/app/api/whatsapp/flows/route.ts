@@ -5,7 +5,7 @@ import {
   requireRole,
   toErrorResponse,
 } from '@/lib/auth/account'
-import { decrypt } from '@/lib/whatsapp/encryption'
+import { loadAccountMetaCredentials } from '@/lib/whatsapp/account-credentials'
 import { listWhatsAppFlows } from '@/lib/whatsapp/meta-api'
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
 import { getT } from '@/lib/i18n/translate'
@@ -22,19 +22,16 @@ export async function GET() {
     )
     if (!limit.success) return rateLimitResponse(limit)
 
-    const { data: config, error } = await supabase
-      .from('whatsapp_config')
-      .select('waba_id, access_token')
-      .eq('account_id', accountId)
-      .maybeSingle()
-
-    if (error || !config) {
+    let credentials
+    try {
+      credentials = await loadAccountMetaCredentials(supabase, accountId)
+    } catch {
       return NextResponse.json(
         { error: t('common.whatsappNotConfiguredConnect') },
         { status: 400 },
       )
     }
-    if (!config.waba_id) {
+    if (!credentials.wabaId) {
       return NextResponse.json(
         { error: t('common.wabaIdMissing') },
         { status: 400 },
@@ -42,8 +39,8 @@ export async function GET() {
     }
 
     const flows = await listWhatsAppFlows({
-      wabaId: config.waba_id,
-      accessToken: decrypt(config.access_token),
+      wabaId: credentials.wabaId,
+      accessToken: credentials.accessToken,
     })
     return NextResponse.json({ flows })
   } catch (error) {

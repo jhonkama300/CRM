@@ -371,6 +371,7 @@ export interface Channel {
   id: string;
   account_id: string;
   department_id: string | null;
+  department?: { id: string; name: string } | null;
   user_id: string;
   source_config_id: string | null;
   name: string;
@@ -479,12 +480,17 @@ export interface Pipeline {
   created_at: string;
 }
 
+export type PipelineStageType = 'start' | 'progress' | 'closing';
+export type PipelineClosingOutcome = 'won' | 'lost';
+
 export interface PipelineStage {
   id: string;
   pipeline_id: string;
   name: string;
   position: number;
   color: string;
+  stage_type: PipelineStageType;
+  closing_outcome: PipelineClosingOutcome | null;
   created_at: string;
 }
 

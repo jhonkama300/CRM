@@ -143,6 +143,14 @@ describe('setup', () => {
     ])
   })
 
+  it('treats a connected channel as WhatsApp being connected', () => {
+    expect(
+      setupSteps({ ...base, whatsappConnected: false, hasChannel: true }).find(
+        (step) => step.id === 'whatsapp',
+      )?.done,
+    ).toBe(true)
+  })
+
   it('shows setup only until the first conversation exists', () => {
     expect(needsSetup(base)).toBe(true)
     expect(needsSetup({ ...base, hasConversations: true })).toBe(false)

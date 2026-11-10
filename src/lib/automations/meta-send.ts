@@ -9,7 +9,7 @@ import {
   engineSendInteractiveButtons,
   engineSendInteractiveList,
 } from '@/lib/flows/meta-send';
-import { decrypt } from '@/lib/whatsapp/encryption';
+import { loadAccountMetaCredentials } from '@/lib/whatsapp/account-credentials';
 import {
   phoneVariants,
   isRecipientNotAllowedError,
@@ -216,16 +216,14 @@ async function sendViaMeta(
   }
   const sanitized = sendTarget.target;
 
-  const { data: config, error: configErr } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', input.accountId)
-    .single();
-  if (configErr || !config) {
+  let credentials
+  try {
+    credentials = await loadAccountMetaCredentials(db, input.accountId)
+  } catch {
     throw new Error(t('send.notConfigured'));
   }
 
-  const accessToken = decrypt(config.access_token);
+  const accessToken = credentials.accessToken;
 
   // Local template row. A missing row is fine: the send still goes
   // out, we just can't reconstruct the text the customer saw.
@@ -244,7 +242,7 @@ async function sendViaMeta(
   const attempt = async (phone: string): Promise<string> => {
     if (input.kind === 'template') {
       const r = await sendTemplateMessage({
-        phoneNumberId: config.phone_number_id,
+        phoneNumberId: credentials.phoneNumberId,
         accessToken,
         to: phone,
         templateName: input.templateName,
@@ -256,7 +254,7 @@ async function sendViaMeta(
     }
     if (input.kind === 'flow') {
       const r = await sendFlowMessage({
-        phoneNumberId: config.phone_number_id,
+        phoneNumberId: credentials.phoneNumberId,
         accessToken,
         to: phone,
         flowId: input.flowId,
@@ -273,7 +271,7 @@ async function sendViaMeta(
     }
     if (input.kind === 'location_request') {
       const r = await sendLocationRequest({
-        phoneNumberId: config.phone_number_id,
+        phoneNumberId: credentials.phoneNumberId,
         accessToken,
         to: phone,
         bodyText: input.bodyText,
@@ -281,7 +279,7 @@ async function sendViaMeta(
       return r.messageId;
     }
     const r = await sendTextMessage({
-      phoneNumberId: config.phone_number_id,
+      phoneNumberId: credentials.phoneNumberId,
       accessToken,
       to: phone,
       text: input.text,

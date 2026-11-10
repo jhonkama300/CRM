@@ -432,6 +432,8 @@ export interface OrganizationCanvasProps {
   onInvite: (department: Department) => void;
   invitationsByDepartment: Map<string, AccountInvitation[]>;
   onPositionChange: (id: string, x: number, y: number) => void;
+  onSelectDepartment: (department: Department | null) => void;
+  selectedDepartmentId?: string | null;
   className?: string;
   fitMinZoom?: number;
   showAddButton?: boolean;
@@ -454,6 +456,8 @@ function OrganizationCanvasInner({
   onInvite,
   invitationsByDepartment,
   onPositionChange,
+  onSelectDepartment,
+  selectedDepartmentId,
   className,
   fitMinZoom = 0.78,
   showAddButton = true,
@@ -600,6 +604,7 @@ function OrganizationCanvasInner({
           id: department.id,
           type: 'department',
           position,
+          selected: department.id === selectedDepartmentId,
           data: {
             department,
             members,
@@ -690,6 +695,7 @@ function OrganizationCanvasInner({
     onAddRoot,
     onInviteCompany,
     freePositions,
+    selectedDepartmentId,
   ]);
 
   const [nodes, setNodes, onNodesChange] =
@@ -746,7 +752,9 @@ function OrganizationCanvasInner({
         edges={edges}
         nodeTypes={NODE_TYPES}
         nodesConnectable={false}
-        onNodesChange={onNodesChange}
+        onNodesChange={(changes) =>
+          onNodesChange(changes.filter((change) => change.type !== "select"))
+        }
         onNodeDragStop={(_, node) => {
           if (node.id === '__company__') return;
           setFreePositions(
@@ -759,6 +767,10 @@ function OrganizationCanvasInner({
           );
           setLevelMode(false);
           onPositionChange(node.id, node.position.x, node.position.y);
+        }}
+        onNodeClick={(_, node) => {
+          const department = departments.find((d) => d.id === node.id);
+          if (department) onSelectDepartment(department);
         }}
         onNodeDoubleClick={(_, node) => {
           const department = departments.find((d) => d.id === node.id);

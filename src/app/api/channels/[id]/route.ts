@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 import { decrypt, encrypt } from '@/lib/whatsapp/encryption';
 import { validateChannelCredentials } from '@/lib/whatsapp/channel-validation';
 import { registerPhoneNumber } from '@/lib/whatsapp/meta-api';
@@ -14,12 +15,13 @@ function bad(message: string, status = 400) {
 
 export async function PATCH(request: Request, { params }: Params) {
   try {
-    const { supabase, accountId, userId } = await requireRole('admin');
+    const { accountId, userId } = await requireRole('admin');
+    const admin = supabaseAdmin();
     const { id } = await params;
     const body = await request.json().catch(() => null);
     if (!body) return bad('Invalid request body');
 
-    const { data: existing } = await supabase
+    const { data: existing } = await admin
       .from('channels')
       .select('id, phone_number_id, waba_id, access_token, registered_at')
       .eq('id', id)
@@ -48,7 +50,7 @@ export async function PATCH(request: Request, { params }: Params) {
           ? body.department_id.trim()
           : null;
       if (departmentId) {
-        const { data: department } = await supabase
+        const { data: department } = await admin
           .from('departments')
           .select('id')
           .eq('id', departmentId)
@@ -144,7 +146,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
     if (Object.keys(patch).length === 0) return bad('Nothing to update');
 
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from('channels')
       .update(patch)
       .eq('id', id)
@@ -175,9 +177,10 @@ export async function PATCH(request: Request, { params }: Params) {
 
 export async function DELETE(_request: Request, { params }: Params) {
   try {
-    const { supabase, accountId, userId } = await requireRole('admin');
+    const { accountId, userId } = await requireRole('admin');
+    const admin = supabaseAdmin();
     const { id } = await params;
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from('channels')
       .delete()
       .eq('id', id)

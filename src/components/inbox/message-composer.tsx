@@ -165,21 +165,49 @@ function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+function quickReplyVariableMap(contact?: Contact | null) {
+  const name = contact?.name || contact?.phone || "";
+  const phone = contact?.phone ?? "";
+  const email = contact?.email ?? "";
+  const company = contact?.company ?? "";
+  const username = contact?.wa_username ? `@${contact.wa_username}` : "";
+  const bsuid = contact?.wa_user_id ?? "";
+  return {
+    name,
+    nombre: name,
+    phone,
+    telefono: phone,
+    email,
+    correo: email,
+    company,
+    empresa: company,
+    username,
+    usuario: username,
+    bsuid,
+  } as Record<string, string>;
+}
+
 /** Fill the supported quick-reply variables from the conversation contact. */
 function resolveQuickReplyVariables(value: string, contact?: Contact | null) {
   if (!value.includes("{{")) return value;
-  const vars: Record<string, string> = {
-    name: contact?.name ?? "",
-    phone: contact?.phone ?? "",
-    email: contact?.email ?? "",
-    company: contact?.company ?? "",
-    username: contact?.wa_username ? `@${contact.wa_username}` : "",
-    bsuid: contact?.wa_user_id ?? "",
-  };
+  const vars = quickReplyVariableMap(contact);
   return value.replace(
     /\{\{\s*([a-zA-Z_]+)\s*\}\}/g,
     (match, key: string) => vars[key.toLowerCase()] ?? match,
   );
+}
+
+function resolveQuickReplyPayloadVariables<T>(
+  payload: T,
+  contact?: Contact | null,
+): T {
+  const vars = quickReplyVariableMap(contact);
+  return JSON.parse(
+    JSON.stringify(payload).replace(
+      /\{\{\s*([a-zA-Z_]+)\s*\}\}/g,
+      (match, key: string) => vars[key.toLowerCase()] ?? match,
+    ),
+  ) as T;
 }
 
 /** Worker that encodes mic input to Ogg/Opus entirely in the browser
@@ -345,7 +373,10 @@ export function MessageComposer({
 
     setSending(true);
     try {
-      onSend(trimmed, replyTo?.id);
+      onSend(
+        resolveQuickReplyVariables(trimmed, contact),
+        replyTo?.id,
+      );
       setText("");
       setSlash(null);
       if (textareaRef.current) {
@@ -354,7 +385,7 @@ export function MessageComposer({
     } finally {
       setSending(false);
     }
-  }, [text, sending, sessionExpired, onSend, replyTo?.id]);
+  }, [contact, text, sending, sessionExpired, onSend, replyTo?.id]);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -440,10 +471,13 @@ export function MessageComposer({
       toast.error(result.error);
       return;
     }
-    onSendInteractive(interactivePayload, replyTo?.id);
+    onSendInteractive(
+      resolveQuickReplyPayloadVariables(interactivePayload, contact),
+      replyTo?.id,
+    );
     setInteractiveOpen(false);
     onClearReply?.();
-  }, [interactivePayload, onSendInteractive, replyTo?.id, onClearReply]);
+  }, [contact, interactivePayload, onSendInteractive, replyTo?.id, onClearReply]);
 
   // Persist the current builder payload as a reusable interactive snippet.
   const saveAsQuickReply = useCallback(async () => {
@@ -487,14 +521,15 @@ export function MessageComposer({
       setQuickReplyOpen(false);
       setSlash(null);
       if (qr.kind === "interactive" && qr.interactive_payload) {
-        if (
-          qr.interactive_payload.kind !== "buttons" &&
-          qr.interactive_payload.kind !== "list"
-        ) {
-          setMediaQuickReply(qr.interactive_payload);
+        const payload = resolveQuickReplyPayloadVariables(
+          qr.interactive_payload,
+          contact,
+        );
+        if (payload.kind !== "buttons" && payload.kind !== "list") {
+          setMediaQuickReply(payload);
           return;
         }
-        openInteractiveBuilder(qr.interactive_payload);
+        openInteractiveBuilder(payload);
         return;
       }
       const body = resolveQuickReplyVariables(qr.content_text ?? "", contact);
@@ -1174,7 +1209,10 @@ export function MessageComposer({
             <Button
               onClick={() => {
                 if (!mediaQuickReply) return;
-                onSendInteractive(mediaQuickReply, replyTo?.id);
+                onSendInteractive(
+                  resolveQuickReplyPayloadVariables(mediaQuickReply, contact),
+                  replyTo?.id,
+                );
                 setMediaQuickReply(null);
                 onClearReply?.();
               }}

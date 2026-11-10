@@ -59,11 +59,33 @@ const QUICK_REPLY_VARIABLES = [
   { token: '{{username}}', key: 'varUsername', sample: '@juan' },
 ] as const;
 
+const SAMPLE_VARIABLES: Record<string, string> = {
+  name: 'Juan Pérez',
+  nombre: 'Juan Pérez',
+  phone: '+57 300 000 0000',
+  telefono: '+57 300 000 0000',
+  email: 'juan@empresa.com',
+  correo: 'juan@empresa.com',
+  company: 'Empresa SAS',
+  empresa: 'Empresa SAS',
+  username: '@juan',
+  usuario: '@juan',
+  bsuid: 'US.1234567890',
+}
+
 function withSampleVariables(value: string): string {
-  return QUICK_REPLY_VARIABLES.reduce(
-    (text, variable) => text.replaceAll(variable.token, variable.sample),
-    value
-  );
+  return value.replace(/\{\{\s*([a-zA-Z_]+)\s*\}\}/g, (match, key: string) =>
+    SAMPLE_VARIABLES[key.toLowerCase()] ?? match,
+  )
+}
+
+function withSamplePayloadVariables<T>(payload: T): T {
+  const json = JSON.stringify(payload)
+  return JSON.parse(
+    json.replace(/\{\{\s*([a-zA-Z_]+)\s*\}\}/g, (match, key: string) =>
+      SAMPLE_VARIABLES[key.toLowerCase()] ?? match,
+    ),
+  ) as T
 }
 
 type DraftKind = QuickReplyKind | 'media' | 'audio' | 'cta' | 'contact';
@@ -518,7 +540,7 @@ export function QuickRepliesManager() {
                       </div>
                     ) : draft.kind === 'interactive' ? (
                       <InteractivePreview
-                        payload={draft.interactive_payload}
+                        payload={withSamplePayloadVariables(draft.interactive_payload)}
                         labels={{
                           body: tInteractive('previewBody'),
                           button: tInteractive('previewButton'),
@@ -528,7 +550,7 @@ export function QuickRepliesManager() {
                       />
                     ) : draft.kind === 'audio' && draft.audio?.audio_url ? (
                       <InteractivePreview
-                        payload={draft.audio}
+                        payload={withSamplePayloadVariables(draft.audio)}
                         labels={{
                           body: tInteractive('previewBody'),
                           button: tInteractive('previewButton'),
@@ -549,7 +571,7 @@ export function QuickRepliesManager() {
                       />
                     ) : draft.media?.header_media.url ? (
                       <InteractivePreview
-                        payload={draft.media}
+                        payload={withSamplePayloadVariables(draft.media)}
                         labels={{
                           body: tInteractive('previewBody'),
                           button: tInteractive('previewButton'),
@@ -1013,6 +1035,21 @@ function MediaEditor({
           placeholder={t('textPlaceholder')}
           className="bg-muted text-foreground min-h-24"
         />
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <span className="text-muted-foreground text-[10px]">
+            {t('variablesHint')}
+          </span>
+          {QUICK_REPLY_VARIABLES.map((variable) => (
+            <button
+              key={variable.token}
+              type="button"
+              onClick={() => set({ body: media.body + variable.token })}
+              className="border-border bg-muted text-muted-foreground hover:text-foreground rounded-full border px-2 py-0.5 text-[10px]"
+            >
+              {t(variable.key)}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div>

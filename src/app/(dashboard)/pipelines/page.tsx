@@ -59,13 +59,13 @@ export default function PipelinesPage() {
   const loadChannels = useCallback(async () => {
     const { data, error } = await supabase
       .from("channels")
-      .select("id, name, color, department_id")
+      .select("id, name, color, department_id, department:departments(id,name)")
       .order("name");
     if (error) {
       console.error("Failed to load channels:", error.message);
       return [];
     }
-    return (data ?? []) as Channel[];
+    return (data ?? []) as unknown as Channel[];
   }, [supabase]);
 
   const loadStages = useCallback(
@@ -160,15 +160,16 @@ export default function PipelinesPage() {
   const handleDealMoved = useCallback(
     async (dealId: string, newStageId: string) => {
       const deal = deals.find((item) => item.id === dealId);
-      const sortedStages = [...stages].sort((a, b) => a.position - b.position);
-      const winningStageId = sortedStages.at(-1)?.id ?? null;
-      const isWinning = winningStageId === newStageId;
+      const targetStage = stages.find((stage) => stage.id === newStageId);
+      const closingOutcome =
+        targetStage?.stage_type === "closing"
+          ? targetStage.closing_outcome
+          : null;
       const nextStatus =
-        isWinning
-          ? "won"
-          : deal?.status === "won"
-            ? "open"
-            : undefined;
+        closingOutcome ??
+        (deal?.status === "won" || deal?.status === "lost"
+          ? "open"
+          : undefined);
 
       setDeals((prev) =>
         prev.map((item) =>
@@ -196,7 +197,7 @@ export default function PipelinesPage() {
         return;
       }
 
-      if (!isWinning || !deal) return;
+      if (closingOutcome !== "won" || !deal) return;
 
       const {
         data: { user },
@@ -330,26 +331,24 @@ export default function PipelinesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-            <GitBranch className="h-5 w-5" />
-          </span>
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight text-foreground">
-              {t("title")}
-            </h1>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {t("subtitle")}
-            </p>
-          </div>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            {t("crmCommercial")}
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
+            {t("title")}
+          </h1>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {t("subtitle")}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={() => router.push("/settings?tab=pipelines")}
-            className="gap-1.5"
+            className="gap-1.5 text-muted-foreground hover:text-foreground"
           >
             <Settings2 className="h-3.5 w-3.5" />
             {t("configurePipeline")}
@@ -369,17 +368,14 @@ export default function PipelinesPage() {
       </div>
 
       {pipelines.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-2.5 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3 border-y border-border py-2">
           <DropdownMenu>
-            <DropdownMenuTrigger className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-muted data-[popup-open]:bg-muted">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                <GitBranch className="h-3 w-3" />
-              </span>
+            <DropdownMenuTrigger className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-muted data-[popup-open]:bg-muted">
               <span className="min-w-0">
-                <span className="block truncate text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                <span className="block truncate text-[9px] uppercase tracking-[0.16em] text-muted-foreground">
                   {t("pipelineLabel")}
                 </span>
-                <span className="block max-w-[180px] truncate font-semibold">
+                <span className="block max-w-[190px] truncate text-[13px] font-semibold text-foreground">
                   {selectedPipeline?.name ?? t("selectPipeline")}
                 </span>
               </span>
@@ -417,9 +413,9 @@ export default function PipelinesPage() {
           </DropdownMenu>
 
           {selectedChannel && (
-            <span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <span
-                className="h-2 w-2 rounded-full"
+                className="h-1.5 w-1.5 rounded-full"
                 style={{ backgroundColor: selectedChannel.color }}
               />
               <span className="max-w-[140px] truncate">
@@ -466,8 +462,8 @@ export default function PipelinesPage() {
       ) : (
         <>
           <PipelineAnalytics deals={deals} />
-          <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_280px] xl:items-start">
-            <div className="min-w-0 rounded-xl border border-border bg-card/35 p-2.5">
+          <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_270px] xl:items-start">
+            <div className="min-w-0">
               <PipelineBoard
                 stages={stages}
                 deals={filteredDeals}

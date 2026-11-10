@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 import { encrypt } from '@/lib/whatsapp/encryption';
 import { validateChannelCredentials } from '@/lib/whatsapp/channel-validation';
 import { registerPhoneNumber } from '@/lib/whatsapp/meta-api';
@@ -27,7 +28,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { supabase, accountId, userId } = await requireRole('admin');
+    const { accountId, userId } = await requireRole('admin');
+    const admin = supabaseAdmin();
     const body = await request.json().catch(() => null);
     if (!body) return bad('Invalid request body');
 
@@ -45,7 +47,7 @@ export async function POST(request: Request) {
         ? body.department_id.trim()
         : null;
     if (departmentId) {
-      const { data: department } = await supabase
+      const { data: department } = await admin
         .from('departments')
         .select('id')
         .eq('id', departmentId)
@@ -54,7 +56,7 @@ export async function POST(request: Request) {
       if (!department) return bad('Department not found', 404);
     }
 
-    const { data: existing } = await supabase
+    const { data: existing } = await admin
       .from('channels')
       .select('id')
       .eq('phone_number_id', phoneNumberId)
@@ -110,7 +112,7 @@ export async function POST(request: Request) {
     }
 
     const now = new Date().toISOString();
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from('channels')
       .insert({
         account_id: accountId,

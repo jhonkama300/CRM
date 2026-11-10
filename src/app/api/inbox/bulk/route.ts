@@ -60,6 +60,16 @@ export async function POST(request: Request) {
       if (role !== "owner" && role !== "admin") {
         return bad("Only admins can delete conversations", 403);
       }
+      // Keep sales deals when their inbox thread is removed: unlink the
+      // conversation first, then delete. The FK also uses SET NULL, but
+      // this keeps existing deployments working before that migration.
+      const { error: unlinkError } = await supabase
+        .from("deals")
+        .update({ conversation_id: null })
+        .eq("account_id", accountId)
+        .in("conversation_id", ownedIds);
+      if (unlinkError) return bad(unlinkError.message, 500);
+
       const { error } = await supabase
         .from("conversations")
         .delete()

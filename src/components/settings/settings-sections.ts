@@ -8,7 +8,6 @@ import {
   KeyRound,
   LayoutGrid,
   MessageCircle,
-  PlugZap,
   ScrollText,
   Tags,
   UsersRound,
@@ -27,7 +26,6 @@ import {
  */
 export const SETTINGS_SECTIONS = [
   'overview',
-  'whatsapp',
   'channels',
   'templates',
   'quick-replies',
@@ -60,12 +58,6 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
     label: 'Overview',
     icon: LayoutGrid,
     group: 'top',
-  },
-  whatsapp: {
-    id: 'whatsapp',
-    label: 'WhatsApp',
-    icon: PlugZap,
-    group: 'workspace',
   },
   channels: {
     id: 'channels',
@@ -151,6 +143,8 @@ function isSection(value: string | null): value is SettingsSection {
  */
 export function resolveSection(raw: string | null): SettingsSection {
   if (raw === 'tags' || raw === 'custom-fields') return 'fields';
+  // The single-number WhatsApp tab was replaced by per-channel setup.
+  if (raw === 'whatsapp') return 'channels';
   // Personal account tabs moved into the account dialog. Old bookmarks
   // land on the workspace overview instead of a blank panel.
   if (raw === 'profile' || raw === 'security' || raw === 'appearance') {

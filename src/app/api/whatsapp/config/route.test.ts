@@ -82,11 +82,25 @@ const serviceRole = vi.hoisted(() => ({ lookups: 0 }))
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({
-    from: vi.fn(() => {
+    from: vi.fn((table: string) => {
       serviceRole.lookups += 1
-      const b: Record<string, unknown> = {}
+      const b: Record<string, unknown> = { __table: table }
       for (const m of ['select', 'eq', 'neq']) b[m] = vi.fn(() => b)
+      b.insert = vi.fn((row: Record<string, unknown>) => {
+        if (b.__table === 'whatsapp_config') configInserts.push(row)
+        return b
+      })
+      b.update = vi.fn((patch: Record<string, unknown>) => {
+        if (b.__table === 'whatsapp_config') configUpdates.push(patch)
+        return b
+      })
+      b.delete = vi.fn(() => {
+        if (b.__table === 'whatsapp_config') configDeletes += 1
+        return b
+      })
       b.maybeSingle = vi.fn(async () => ({ data: null, error: null }))
+      b.then = (resolve: (v: unknown) => unknown) =>
+        resolve({ data: null, error: null })
       return b
     }),
   })),

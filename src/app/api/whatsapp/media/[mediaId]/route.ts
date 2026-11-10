@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
-import { decrypt } from '@/lib/whatsapp/encryption'
+import { loadAccountMetaCredentials } from '@/lib/whatsapp/account-credentials'
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
 import { getT } from '@/lib/i18n/translate'
 import { mediaProxyHeaders } from '@/lib/media/proxy-response-headers'
@@ -56,21 +56,17 @@ export async function GET(
       )
     }
 
-    // Fetch and decrypt WhatsApp config
-    const { data: config, error: configError } = await supabase
-      .from('whatsapp_config')
-      .select('*')
-      .eq('account_id', accountId)
-      .single()
-
-    if (configError || !config) {
+    let credentials
+    try {
+      credentials = await loadAccountMetaCredentials(supabase, accountId)
+    } catch {
       return NextResponse.json(
         { error: t('common.whatsappNotConfigured') },
         { status: 400 }
       )
     }
 
-    const accessToken = decrypt(config.access_token)
+    const accessToken = credentials.accessToken
 
     // Get the download URL from Meta
     const mediaInfo = await getMediaUrl({ mediaId, accessToken })

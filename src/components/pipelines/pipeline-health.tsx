@@ -94,51 +94,51 @@ export function PipelineHealth({ deals, stages }: PipelineHealthProps) {
   }
 
   return (
-    <aside className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-      <div className="flex items-start gap-2.5 border-b border-border p-4">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Activity className="h-4 w-4" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-foreground">{t("title")}</p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
+    <aside className="flex h-full flex-col border-l border-border pl-4">
+      <div className="flex items-start gap-2 border-b border-border pb-3">
+        <Activity className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-foreground">
+            {t("title")}
+          </p>
+          <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
             {t("description")}
           </p>
         </div>
-        <span className="ml-auto rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
+        <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
           {t("openDeals", { count: health.openCount })}
         </span>
       </div>
 
-      <div className="flex-1 space-y-5 p-4">
+      <div className="flex-1 space-y-6 pt-4">
         <section>
-          <div className="mb-2.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            <Layers3 className="h-3.5 w-3.5" />
+          <div className="mb-3 flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+            <Layers3 className="h-3 w-3" />
             {t("stageDistribution")}
           </div>
           {health.openCount === 0 ? (
-            <p className="rounded-lg border border-dashed border-border px-2.5 py-3 text-[11px] text-muted-foreground">
+            <p className="border border-dashed border-border px-2.5 py-3 text-[10px] text-muted-foreground">
               {t("noDeals")}
             </p>
           ) : (
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               {health.stageRows.map(({ stage, count }) => (
                 <div key={stage.id}>
                   <div className="flex items-center gap-2">
                     <span
-                      className="h-2 w-2 shrink-0 rounded-full"
+                      className="h-1.5 w-1.5 shrink-0 rounded-full"
                       style={{ backgroundColor: stage.color }}
                     />
                     <span className="min-w-0 flex-1 truncate text-[11px] text-foreground">
                       {stage.name}
                     </span>
-                    <span className="text-[10px] font-semibold tabular-nums text-muted-foreground">
+                    <span className="text-[10px] tabular-nums text-muted-foreground">
                       {count}
                     </span>
                   </div>
-                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div className="mt-1.5 h-1 overflow-hidden bg-muted">
                     <div
-                      className="h-full rounded-full"
+                      className="h-full"
                       style={{
                         width: `${(count / health.maxStageCount) * 100}%`,
                         backgroundColor: stage.color,
@@ -151,18 +151,18 @@ export function PipelineHealth({ deals, stages }: PipelineHealthProps) {
           )}
         </section>
 
-        <section className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+        <section className="border-l-2 border-amber-500/50 pl-3">
           <div className="flex items-start gap-2">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-amber-500/10 text-amber-400">
-              <AlertTriangle className="h-3.5 w-3.5" />
-            </span>
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium text-foreground">{t("stalled")}</p>
-              <p className="mt-0.5 text-[10px] text-muted-foreground">
+              <p className="text-[11px] font-medium text-foreground">
+                {t("stalled")}
+              </p>
+              <p className="mt-1 text-[10px] text-muted-foreground">
                 {t("stalledDesc", { days: STALLED_DAYS })}
               </p>
             </div>
-            <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-amber-400">
+            <span className="text-[11px] font-semibold tabular-nums text-amber-400">
               {health.stalledCount}
             </span>
           </div>
@@ -172,39 +172,43 @@ export function PipelineHealth({ deals, stages }: PipelineHealthProps) {
         </section>
 
         <section>
-          <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            <Clock3 className="h-3.5 w-3.5" />
+          <div className="mb-2 flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+            <Clock3 className="h-3 w-3" />
             {t("oldest")}
           </div>
           {health.oldest ? (
-            <div className="rounded-lg border border-border bg-muted/30 p-2.5">
-              <p className="line-clamp-2 text-xs font-medium text-foreground">
+            <div>
+              <p className="line-clamp-2 text-[11px] font-medium leading-relaxed text-foreground">
                 {health.oldest.title}
               </p>
               <p className="mt-1 text-[10px] text-muted-foreground">
-                {stageOf(health.oldest, stages)?.name ?? "—"} ·{" "}
+                {stageOf(health.oldest, stages)?.name ?? "-"} ·{" "}
                 {relativeTime(
                   health.oldest.updated_at ?? health.oldest.created_at,
                 )}
               </p>
             </div>
           ) : (
-            <p className="rounded-lg border border-dashed border-border px-2.5 py-3 text-[11px] text-muted-foreground">
+            <p className="border border-dashed border-border px-2.5 py-3 text-[10px] text-muted-foreground">
               {t("noDeals")}
             </p>
           )}
         </section>
 
-        <section className="grid grid-cols-2 gap-2 border-t border-border pt-4">
-          <div className="rounded-lg border border-border bg-muted/30 px-2.5 py-2">
-            <p className="text-[10px] text-muted-foreground">{t("avgAge")}</p>
-            <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
+        <section className="grid grid-cols-2 gap-4 border-t border-border pt-4">
+          <div>
+            <p className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+              {t("avgAge")}
+            </p>
+            <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
               {t("days", { count: Math.round(health.avgAge) })}
             </p>
           </div>
-          <div className="rounded-lg border border-border bg-muted/30 px-2.5 py-2">
-            <p className="text-[10px] text-muted-foreground">{t("openLabel")}</p>
-            <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
+          <div>
+            <p className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+              {t("openLabel")}
+            </p>
+            <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
               {health.openCount}
             </p>
           </div>

@@ -197,27 +197,41 @@ function StageColumn({
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
 
   return (
-    <div className="flex w-[85vw] min-w-[268px] max-w-[320px] shrink-0 snap-start flex-col rounded-xl border border-border bg-card/70 p-3 shadow-sm lg:w-auto lg:max-w-none lg:flex-1 lg:basis-[272px] lg:shrink lg:snap-none">
-      <div className="flex items-center gap-2 px-0.5">
+    <div
+      className="flex w-[85vw] min-w-[268px] max-w-[320px] shrink-0 snap-start flex-col border-l border-border/70 px-3 pb-3 pt-1 first:border-l-0 lg:w-auto lg:max-w-none lg:flex-1 lg:basis-[280px] lg:shrink lg:snap-none"
+      style={{
+        background: `linear-gradient(180deg, ${stage.color}0A 0, transparent 150px)`,
+      }}
+    >
+      <div className="flex items-center gap-2 border-b border-border/70 pb-2.5">
         <span
-          className="h-2.5 w-2.5 shrink-0 rounded-full ring-4 ring-background/40"
-          style={{ backgroundColor: stage.color }}
+          className="h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{
+            backgroundColor: stage.color,
+            boxShadow: `0 0 0 3px ${stage.color}22, 0 0 10px ${stage.color}99`,
+          }}
         />
         <h3 className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">
           {stage.name}
         </h3>
-        <span className="shrink-0 rounded-md border border-border bg-muted/70 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
+        <span className="shrink-0 rounded-full bg-muted/70 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
           {deals.length}
         </span>
       </div>
 
       <div
         ref={setNodeRef}
-        className={`mt-3 flex flex-1 flex-col gap-2 rounded-lg transition-all ${
-          isOver
-            ? "bg-primary/5 p-1.5 outline outline-2 outline-dashed outline-primary/70"
-            : ""
+        className={`mt-2.5 flex flex-1 flex-col gap-2 transition-all ${
+          isOver ? "p-1.5 outline outline-2 outline-dashed" : ""
         }`}
+        style={
+          isOver
+            ? {
+                backgroundColor: `${stage.color}0D`,
+                outlineColor: stage.color,
+              }
+            : undefined
+        }
       >
         {deals.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-border/80 px-3 py-10 text-center">
@@ -243,7 +257,7 @@ function StageColumn({
         variant="ghost"
         size="sm"
         onClick={() => onAddDeal(stage.id)}
-        className="mt-3 w-full justify-start rounded-md border border-dashed border-border bg-transparent text-[11px] text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
+        className="mt-2 w-full justify-start rounded-md border-0 bg-transparent text-[11px] text-muted-foreground hover:bg-muted/40 hover:text-foreground"
       >
         <Plus className="mr-1 h-3 w-3" />
         {t("addDeal")}

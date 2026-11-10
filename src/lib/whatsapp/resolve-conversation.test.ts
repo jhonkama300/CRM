@@ -50,6 +50,8 @@ function makeDb(script: Script): SupabaseClient {
     eq: () => builder,
     order: () => builder,
     limit: () => {
+      // The channel lookup continues to `.maybeSingle()` after limit.
+      if (table === 'channels') return builder;
       // Only the conversation lookup terminates on `.limit(1)`.
       if (table === 'conversations' && mode === 'select') {
         const row = script.existingConversationByCall

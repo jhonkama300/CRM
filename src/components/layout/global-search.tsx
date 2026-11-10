@@ -129,7 +129,7 @@ const QUICK_ACTIONS: {
   { labelKey: 'newBroadcast', href: '/broadcasts/new', icon: Radio },
   { labelKey: 'newAutomation', href: '/automations/new', icon: Zap },
   { labelKey: 'newTemplate', href: '/settings?tab=templates', icon: FileText },
-  { labelKey: 'openWhatsapp', href: '/settings?tab=whatsapp', icon: PlugZap },
+  { labelKey: 'openWhatsapp', href: '/settings?tab=channels', icon: PlugZap },
   { labelKey: 'openSettings', href: '/settings', icon: Settings },
 ];
 

@@ -14,7 +14,6 @@ import { ConversationList } from "@/components/inbox/conversation-list";
 import { parseInboxFilter } from "@/lib/inbox/inbox-filters";
 import { MessageThread } from "@/components/inbox/message-thread";
 import { ContactSidebar } from "@/components/inbox/contact-sidebar";
-import { toast } from "sonner";
 import { WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -207,13 +206,24 @@ function InboxPageInner() {
         return;
       }
 
-      const { data } = await supabase
-        .from("whatsapp_config")
-        .select("status")
-        .eq("account_id", accountId)
-        .maybeSingle();
+      const [{ data: config }, { data: channels }] = await Promise.all([
+        supabase
+          .from("whatsapp_config")
+          .select("status")
+          .eq("account_id", accountId)
+          .maybeSingle(),
+        supabase
+          .from("channels")
+          .select("status")
+          .eq("account_id", accountId),
+      ]);
 
-      setWhatsappConnected(data?.status === "connected");
+      const hasConnectedChannel = (channels ?? []).some(
+        (channel) => channel.status === "connected",
+      );
+      setWhatsappConnected(
+        hasConnectedChannel || config?.status === "connected",
+      );
     };
 
     checkConnection();
