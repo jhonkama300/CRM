@@ -99,10 +99,11 @@ export function PipelineBoard({
       {/* snap-x + snap-mandatory on mobile so swipes land the next
           stage cleanly at the viewport edge instead of mid-column.
           Disabled on lg+ where snapping would interfere with the
-          natural layout. The board can still overflow horizontally on
-          lg+ once a pipeline has many stages (columns keep a 260px
-          min-width), so a thin scrollbar stays visible on desktop. */}
-      <div className="pipeline-scroll flex snap-x snap-mandatory gap-3 overflow-x-auto pb-4 lg:snap-none">
+          natural layout. On desktop the columns share the available
+          width evenly so every stage stays visible; horizontal scroll
+          only kicks in when there are too many stages to fit (each
+          column keeps a 168px minimum). */}
+      <div className="pipeline-scroll flex h-full min-h-0 snap-x snap-mandatory gap-3 overflow-x-auto pb-4 lg:snap-none">
         {sortedStages.map((stage) => {
           const stageDeals = dealsByStage.get(stage.id) ?? [];
           return (
@@ -198,7 +199,7 @@ function StageColumn({
 
   return (
     <div
-      className="flex w-[85vw] min-w-[268px] max-w-[320px] shrink-0 snap-start flex-col border-l border-border/70 px-3 pb-3 pt-1 first:border-l-0 lg:w-auto lg:max-w-none lg:flex-1 lg:basis-[280px] lg:shrink lg:snap-none"
+      className="flex w-[85vw] min-w-[268px] max-w-[320px] shrink-0 snap-start flex-col border-l border-border/70 px-3 pb-3 pt-1 first:border-l-0 lg:h-full lg:min-h-0 lg:w-auto lg:min-w-[168px] lg:max-w-none lg:flex-1 lg:snap-none"
       style={{
         background: `linear-gradient(180deg, ${stage.color}0A 0, transparent 150px)`,
       }}
@@ -221,7 +222,7 @@ function StageColumn({
 
       <div
         ref={setNodeRef}
-        className={`mt-2.5 flex flex-1 flex-col gap-2 transition-all ${
+        className={`mt-2.5 flex flex-1 flex-col gap-2 transition-all lg:min-h-0 lg:overflow-y-auto ${
           isOver ? "p-1.5 outline outline-2 outline-dashed" : ""
         }`}
         style={

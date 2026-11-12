@@ -33,6 +33,8 @@ import { openOrganizationModal } from '@/lib/organization-modal';
 
 const pageTitles: Record<string, string> = {
   '/dashboard': 'dashboard',
+  '/metricas': 'metrics',
+  '/metrics': 'metrics',
   '/inbox': 'inbox',
   '/company': 'company',
   '/contacts': 'contacts',

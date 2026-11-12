@@ -39,7 +39,6 @@ export function PipelineCard({
   const openDeals = stages.reduce((sum, s) => sum + s.dealCount, 0)
   const stats = data?.pipeline.stats.find((s) => s.pipelineId === pipelineId) ?? null
   const winRate = stats ? ratio(stats.won, stats.won + stats.lost) : null
-  const pipelineName = pipelines.find((p) => p.id === pipelineId)?.name
 
   return (
     <Card className="h-full">
@@ -48,9 +47,13 @@ export function PipelineCard({
         <CardDescription>{t('description')}</CardDescription>
         <CardAction>
           {pipelines.length > 1 ? (
-            <Select value={pipelineId ?? ''} onValueChange={(v) => setChosen(String(v))}>
+            <Select
+              value={pipelineId ?? ''}
+              items={pipelines.map((p) => ({ value: p.id, label: p.name }))}
+              onValueChange={(v) => setChosen(String(v))}
+            >
               <SelectTrigger size="sm" className="max-w-40" aria-label={t('choosePipeline')}>
-                <SelectValue>{pipelineName}</SelectValue>
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {pipelines.map((p) => (

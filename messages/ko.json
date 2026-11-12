@@ -142,7 +142,8 @@
     "menuSettings": "설정",
     "menuSignOut": "로그아웃",
     "company": "회사",
-    "structure": "회사 구조"
+    "structure": "회사 구조",
+    "metrics": "지표"
   },
   "CommandPalette": {
     "title": "검색",
@@ -199,7 +200,8 @@
     "menuSettings": "설정",
     "menuSignOut": "로그아웃",
     "company": "회사",
-    "structure": "회사 구조"
+    "structure": "회사 구조",
+    "metrics": "지표"
   },
   "ModeToggle": {
     "switchMode": "{mode} 모드로 전환"
@@ -3939,6 +3941,15 @@
       "invalidPhoneNumberId": "Phone Number ID가 올바르지 않습니다",
       "invalidWabaId": "WABA ID가 올바르지 않습니다",
       "phoneNotInWaba": "Phone Number ID가 해당 WABA에 없습니다"
+    },
+    "metrics": {
+      "loadFailed": "메트릭을 불러오지 못했습니다.",
+      "conversationsFailed": "대화를 불러오지 못했습니다.",
+      "exportFailed": "메트릭을 내보내지 못했습니다.",
+      "slaLoadFailed": "SLA 설정을 불러오지 못했습니다.",
+      "slaUpdateFailed": "SLA 설정을 저장하지 못했습니다.",
+      "eventsFailed": "대화 기록을 불러오지 못했습니다.",
+      "invalidParams": "메트릭 매개변수가 올바르지 않습니다."
     }
   },
   "Company": {
@@ -3979,5 +3990,305 @@
       "unnamed": "이름 없음"
     },
     "structureButton": "회사 구조"
+  },
+  "Metrics": {
+    "title": "지표",
+    "description": "팀의 응답 시간, SLA 준수율, 업무량을 확인하세요.",
+    "updatedAt": "{time}에 업데이트됨",
+    "loadFailed": "지표를 불러오지 못했습니다.",
+    "retry": "다시 시도",
+    "accessDeniedTitle": "관리자 전용",
+    "accessDeniedBody": "지표는 계정 소유자와 관리자만 사용할 수 있습니다.",
+    "rangeLabel": "날짜 범위",
+    "channelLabel": "채널별 지표 필터",
+    "allChannels": "모든 채널",
+    "range": {
+      "1": "오늘",
+      "7": "7일",
+      "30": "30일",
+      "90": "90일"
+    },
+    "summary": {
+      "medianFirst": "첫 응답 중앙값",
+      "medianFirstInfo": "이 기간에 고객이 첫 사람 응답을 받기까지 기다리는 일반적인 시간입니다.",
+      "averageFirst": "첫 응답 평균",
+      "averageFirstInfo": "고객의 첫 메시지부터 사람 응답까지 걸린 평균 시간입니다.",
+      "p90First": "첫 응답 P90",
+      "p90FirstInfo": "고객 메시지의 90%가 이 시간보다 빠르게 사람 응답을 받았습니다.",
+      "sla": "SLA 준수율",
+      "slaInfo": "계정의 응답 목표 시간 내에 전송된 사람 응답 비율입니다.",
+      "slaDetail": "{total}건 중 {within}건이 목표 내",
+      "samples": "{count, plural, =1 {응답 1건} other {응답 #건}}",
+      "target": "목표 {minutes}분",
+      "resolvedCount": "{count, plural, =1 {1건 해결} other {#건 해결}}",
+      "medianResolution": "해결 중앙값",
+      "medianResolutionInfo": "대화가 시작되어 종료되기까지 걸리는 일반적인 시간입니다.",
+      "newConversations": "새 대화",
+      "openConversations": "열린 대화",
+      "openConversationsInfo": "기간 종료 시점에 아직 열려 있는 대화입니다.",
+      "unanswered": "미응답",
+      "unansweredInfo": "고객의 마지막 메시지에 아직 응답이 없는 열린 대화입니다.",
+      "aiReply": "AI 첫 응답",
+      "aiDetail": "{count, plural, =0 {AI 응답 없음} =1 {AI 응답 1건} other {AI 응답 #건}}",
+      "none": "—",
+      "vsPrevious": {
+        "1": "이전 날 대비",
+        "7": "이전 7일 대비",
+        "30": "이전 30일 대비",
+        "90": "이전 90일 대비"
+      },
+      "vsPreviousPeriod": "이전 기간 대비",
+      "newContacts": "신규 연락처",
+      "assigned": "배정됨",
+      "assignedInfo": "상담원이 배정된 신규 대화입니다.",
+      "handled": "처리됨",
+      "handledInfo": "해당 기간에 사람 응답이 한 번 이상 있는 대화입니다.",
+      "pendingCritical": "위험 대기",
+      "pendingCriticalInfo": "위험 대기 기준을 초과한 열린 대화입니다."
+    },
+    "response": {
+      "title": "응답 시간",
+      "description": "고객이 문의한 시점을 기준으로 대화별 첫 사람 응답을 보여줍니다.",
+      "median": "중앙값",
+      "p90": "P90",
+      "samplesLabel": "응답",
+      "empty": "아직 응답 데이터가 없습니다",
+      "emptyHint": "고객이 메시지를 보내면 사람 응답이 여기에 표시됩니다.",
+      "none": "—"
+    },
+    "volume": {
+      "title": "메시지 볼륨",
+      "description": "시간 경과에 따른 고객 수신 메시지와 발신 응답입니다.",
+      "descriptionHour": "시간대별 수신 및 발신 메시지입니다.",
+      "byTime": "시간 경과",
+      "byHour": "시간대별",
+      "incoming": "수신",
+      "outgoing": "발신",
+      "deliveryRate": "전송률",
+      "readRate": "읽음",
+      "failed": "실패",
+      "empty": "아직 메시지가 없습니다",
+      "emptyHint": "이 기간에 받은 메시지가 여기에 표시됩니다.",
+      "none": "—"
+    },
+    "agents": {
+      "title": "팀 성과",
+      "description": "팀원별 사람 응답과 열린 업무량입니다.",
+      "empty": "이 기간에 활동이 없습니다",
+      "emptyHint": "상담원이 고객에게 응답하면 여기에 표시됩니다.",
+      "agent": "상담원",
+      "unnamed": "이름 없는 상담원",
+      "open": "열림",
+      "replies": "응답",
+      "conversations": "대화",
+      "assigned": "배정됨",
+      "handled": "처리됨",
+      "resolved": "해결됨",
+      "median": "중앙값",
+      "average": "평균",
+      "p90": "P90",
+      "sla": "SLA",
+      "none": "—"
+    },
+    "channels": {
+      "title": "채널",
+      "description": "채널별 볼륨과 응답 시간입니다.",
+      "empty": "채널 없음",
+      "emptyHint": "채널을 연결하면 측정이 시작됩니다.",
+      "channel": "채널",
+      "new": "신규",
+      "open": "열림",
+      "resolved": "해결",
+      "incoming": "수신",
+      "outgoing": "발신",
+      "median": "중앙값",
+      "p90": "P90",
+      "sla": "SLA",
+      "none": "—"
+    }
+  },
+  "Metricas": {
+    "page": {
+      "unnamedAgent": "이름 없는 상담원",
+      "accessDeniedTitle": "관리자 전용",
+      "accessDeniedBody": "메트릭은 계정 소유자와 관리자만 사용할 수 있습니다.",
+      "loadFailed": "메트릭을 불러오지 못했습니다.",
+      "retry": "다시 시도",
+      "customRangeHint": "시작일과 종료일을 선택한 뒤 적용을 눌러 사용자 지정 기간을 불러오세요."
+    },
+    "filters": {
+      "title": "메트릭",
+      "description": "팀 성과, 응답 시간, SLA, 채널별 활동입니다.",
+      "updatedAt": "{time} 업데이트",
+      "refresh": "새로고침",
+      "refreshing": "새로고침 중…",
+      "allAgents": "모든 상담원",
+      "allChannels": "모든 채널",
+      "agentLabel": "상담원 필터",
+      "channelLabel": "채널 필터",
+      "attentionLabel": "응대 유형",
+      "from": "시작",
+      "to": "종료",
+      "apply": "적용",
+      "preset": {
+        "today": "오늘",
+        "yesterday": "어제",
+        "last7": "최근 7일",
+        "last30": "최근 30일",
+        "last90": "최근 90일",
+        "this_month": "이번 달",
+        "last_month": "지난 달",
+        "custom": "사용자 지정"
+      },
+      "attention": {
+        "all": "전체 응대",
+        "human": "사람",
+        "ai": "AI",
+        "automation": "자동화"
+      }
+    },
+    "sla": {
+      "title": "SLA 및 대기 대화",
+      "description": "설정 가능한 목표와 현재 대기열 상태입니다.",
+      "firstResponse": "첫 응답",
+      "betweenMessages": "응답 간격",
+      "pendingAlert": "대기 경고",
+      "critical": "위험",
+      "minutes": "{count}분",
+      "none": "—",
+      "compliance": "SLA 준수율",
+      "complianceDetail": "{total}건 중 {within}건 목표 내",
+      "pendingNow": "현재 대기",
+      "pendingDetail": "경고 {warning}건 · 위험 {critical}건",
+      "oldest": "가장 오래된 대기 {minutes}분",
+      "configure": "설정",
+      "dialogTitle": "SLA 목표",
+      "dialogDescription": "시간은 실제 메시지를 기준으로 달력 분 단위로 측정됩니다.",
+      "timezone": "시간대",
+      "cancel": "취소",
+      "save": "저장",
+      "saving": "저장 중…",
+      "saveFailed": "설정을 저장하지 못했습니다."
+    },
+    "ai": {
+      "title": "AI 및 자동화",
+      "description": "AI 참여율, 응답 시간, 사람으로의 전환입니다.",
+      "messages": "AI 메시지",
+      "conversationsDetail": "대화 {count}건",
+      "responseTime": "AI 응답",
+      "none": "—",
+      "turnsDetail": "응답 {count}건",
+      "automationMessages": "자동화 메시지",
+      "handoffs": "사람 전환",
+      "handoffsDetail": "AI가 제어를 요청하거나 넘긴 대화입니다.",
+      "participation": "AI 참여율",
+      "humanVsAi": "사람 응답 {human}건 · AI 응답 {ai}건"
+    },
+    "activity": {
+      "title": "요일 및 시간대별 활동",
+      "description": "요일과 현지 시간 기준으로 묶은 수신 및 발신 메시지입니다.",
+      "empty": "이 기간에 활동이 없습니다",
+      "emptyHint": "메시지가 있으면 활동이 여기에 표시됩니다.",
+      "cell": "{weekday} {hour}:00 · 메시지 {count}건",
+      "peakHour": "가장 바쁜 시간: {hour}",
+      "peakWeekday": "가장 바쁜 요일: {weekday}",
+      "none": "—",
+      "total": "총 메시지 {count}건"
+    },
+    "conversations": {
+      "title": "기간 내 대화",
+      "description": "시간, SLA, 응대 유형별 대화 상세입니다.",
+      "searchPlaceholder": "연락처 또는 전화번호 검색",
+      "loadFailed": "대화를 불러오지 못했습니다.",
+      "retry": "다시 시도",
+      "empty": "필터와 일치하는 대화가 없습니다.",
+      "none": "—",
+      "unnamedContact": "이름 없는 연락처",
+      "unassigned": "미배정",
+      "pendingValue": "{minutes}분",
+      "pagination": "{total}건 중 {from}–{to}",
+      "previous": "이전",
+      "next": "다음",
+      "status": {
+        "all": "모든 상태",
+        "open": "열림",
+        "pending": "대기",
+        "closed": "종료"
+      },
+      "slaFilter": {
+        "all": "전체 SLA",
+        "met": "준수",
+        "breached": "위반",
+        "unanswered": "미응답",
+        "pending": "경고",
+        "critical": "위험"
+      },
+      "slaState": {
+        "met": "준수",
+        "breached": "위반",
+        "unanswered": "미응답",
+        "pending": "경고",
+        "critical": "위험",
+        "no_inbound": "수신 없음"
+      },
+      "sort": {
+        "last_activity": "최근 활동",
+        "created": "생성",
+        "first_response": "첫 응답",
+        "pending": "대기",
+        "contact": "연락처"
+      },
+      "direction": {
+        "asc": "오름차순",
+        "desc": "내림차순"
+      },
+      "columns": {
+        "contact": "연락처",
+        "channel": "채널",
+        "agent": "상담원",
+        "status": "상태",
+        "attention": "응대",
+        "created": "생성일",
+        "firstResponse": "첫 응답",
+        "pending": "대기",
+        "sla": "SLA",
+        "history": "기록"
+      },
+      "attention": {
+        "human": "사람",
+        "ai": "AI",
+        "automation": "자동화",
+        "inbound": "수신만"
+      },
+      "history": {
+        "button": "기록 보기",
+        "title": "대화 기록",
+        "description": "대화가 생성된 이후 기록된 이벤트입니다.",
+        "empty": "아직 기록된 이벤트가 없습니다.",
+        "loadFailed": "기록을 불러오지 못했습니다.",
+        "close": "닫기",
+        "actor": {
+          "customer": "고객",
+          "agent": "상담원",
+          "ai": "AI",
+          "automation": "자동화",
+          "system": "시스템"
+        },
+        "events": {
+          "conversation_created": "대화 생성",
+          "conversation_closed": "대화 종료",
+          "conversation_resolved": "대화 해결",
+          "conversation_reopened": "대화 다시 열림",
+          "agent_assigned": "상담원 배정",
+          "agent_unassigned": "상담원 해제",
+          "transferred_to_human": "사람에게 이관",
+          "transferred_to_ai": "AI에게 이관",
+          "conversation_transferred": "상태 변경",
+          "message_received": "메시지 수신",
+          "message_sent": "메시지 발신",
+          "message_failed": "메시지 실패"
+        }
+      }
+    }
   }
 }

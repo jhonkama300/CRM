@@ -142,7 +142,8 @@
     "menuSettings": "Configuración",
     "menuSignOut": "Cerrar sesión",
     "company": "Empresa",
-    "structure": "Estructura de la empresa"
+    "structure": "Estructura de la empresa",
+    "metrics": "Métricas"
   },
   "CommandPalette": {
     "title": "Buscar",
@@ -199,7 +200,8 @@
     "menuSettings": "Configuración",
     "menuSignOut": "Cerrar sesión",
     "company": "Empresa",
-    "structure": "Estructura de la empresa"
+    "structure": "Estructura de la empresa",
+    "metrics": "Métricas"
   },
   "ModeToggle": {
     "switchMode": "Cambiar al modo {mode}"
@@ -3939,6 +3941,15 @@
       "invalidPhoneNumberId": "Phone Number ID inválido",
       "invalidWabaId": "WABA ID inválido",
       "phoneNotInWaba": "El Phone Number ID no pertenece a esa WABA"
+    },
+    "metrics": {
+      "loadFailed": "No se pudieron cargar las métricas.",
+      "conversationsFailed": "No se pudieron cargar las conversaciones.",
+      "exportFailed": "No se pudieron exportar las métricas.",
+      "slaLoadFailed": "No se pudo cargar la configuración del SLA.",
+      "slaUpdateFailed": "No se pudo guardar la configuración del SLA.",
+      "eventsFailed": "No se pudo cargar el historial de la conversación.",
+      "invalidParams": "Parámetros de métricas inválidos."
     }
   },
   "Company": {
@@ -3979,5 +3990,305 @@
       "unnamed": "Sin nombre"
     },
     "structureButton": "Estructura de la empresa"
+  },
+  "Metrics": {
+    "title": "Métricas",
+    "description": "Tiempos de respuesta, cumplimiento del SLA y carga de trabajo del equipo.",
+    "updatedAt": "Actualizado {time}",
+    "loadFailed": "No pudimos cargar las métricas.",
+    "retry": "Reintentar",
+    "accessDeniedTitle": "Solo administradores",
+    "accessDeniedBody": "Las métricas están disponibles para propietarios y administradores de la cuenta.",
+    "rangeLabel": "Rango de fechas",
+    "channelLabel": "Filtrar métricas por canal",
+    "allChannels": "Todos los canales",
+    "range": {
+      "1": "Hoy",
+      "7": "7 días",
+      "30": "30 días",
+      "90": "90 días"
+    },
+    "summary": {
+      "medianFirst": "Mediana de primera respuesta",
+      "medianFirstInfo": "Tiempo típico que espera un cliente para la primera respuesta humana en este periodo.",
+      "averageFirst": "Promedio de primera respuesta",
+      "averageFirstInfo": "Tiempo medio desde el primer mensaje del cliente hasta una respuesta humana.",
+      "p90First": "P90 de primera respuesta",
+      "p90FirstInfo": "El 90% de los mensajes de clientes recibió una respuesta humana antes de este tiempo.",
+      "sla": "Cumplimiento del SLA",
+      "slaInfo": "Proporción de respuestas humanas enviadas dentro del objetivo de respuesta de la cuenta.",
+      "slaDetail": "{within} de {total} dentro del objetivo",
+      "samples": "{count, plural, =1 {1 respuesta} other {# respuestas}}",
+      "target": "Objetivo {minutes} min",
+      "resolvedCount": "{count, plural, =1 {1 resuelta} other {# resueltas}}",
+      "medianResolution": "Mediana de resolución",
+      "medianResolutionInfo": "Tiempo típico desde que inicia una conversación hasta que se cierra.",
+      "newConversations": "Nuevas conversaciones",
+      "openConversations": "Conversaciones abiertas",
+      "openConversationsInfo": "Conversaciones que siguen abiertas al final del periodo.",
+      "unanswered": "Sin responder",
+      "unansweredInfo": "Conversaciones abiertas cuyo último mensaje del cliente aún no tiene respuesta.",
+      "aiReply": "Primera respuesta de IA",
+      "aiDetail": "{count, plural, =0 {Sin respuestas de IA} =1 {1 respuesta de IA} other {# respuestas de IA}}",
+      "none": "—",
+      "vsPrevious": {
+        "1": "vs día anterior",
+        "7": "vs 7 días anteriores",
+        "30": "vs 30 días anteriores",
+        "90": "vs 90 días anteriores"
+      },
+      "vsPreviousPeriod": "vs periodo anterior",
+      "newContacts": "Nuevos contactos",
+      "assigned": "Asignadas",
+      "assignedInfo": "Conversaciones nuevas con un agente asignado.",
+      "handled": "Atendidas",
+      "handledInfo": "Conversaciones con al menos una respuesta humana en el periodo.",
+      "pendingCritical": "Pendientes críticas",
+      "pendingCriticalInfo": "Conversaciones abiertas que superan el umbral crítico de espera."
+    },
+    "response": {
+      "title": "Tiempo de respuesta",
+      "description": "Primera respuesta humana por conversación, agrupada según cuándo preguntó el cliente.",
+      "median": "Mediana",
+      "p90": "P90",
+      "samplesLabel": "Respuestas",
+      "empty": "Aún no hay datos de respuesta",
+      "emptyHint": "Las respuestas humanas aparecerán aquí cuando los clientes escriban.",
+      "none": "—"
+    },
+    "volume": {
+      "title": "Volumen de mensajes",
+      "description": "Mensajes entrantes de clientes y respuestas salientes a lo largo del tiempo.",
+      "descriptionHour": "Mensajes entrantes y salientes por hora del día.",
+      "byTime": "A lo largo del tiempo",
+      "byHour": "Por hora",
+      "incoming": "Entrantes",
+      "outgoing": "Salientes",
+      "deliveryRate": "Entregados",
+      "readRate": "Leídos",
+      "failed": "Fallidos",
+      "empty": "Aún no hay mensajes",
+      "emptyHint": "Los mensajes recibidos en este periodo aparecerán aquí.",
+      "none": "—"
+    },
+    "agents": {
+      "title": "Rendimiento del equipo",
+      "description": "Respuestas humanas y carga abierta por miembro del equipo.",
+      "empty": "Sin actividad en este periodo",
+      "emptyHint": "Los agentes aparecerán aquí cuando respondan a los clientes.",
+      "agent": "Agente",
+      "unnamed": "Agente sin nombre",
+      "open": "Abiertas",
+      "replies": "Respuestas",
+      "conversations": "Conversaciones",
+      "assigned": "Asignadas",
+      "handled": "Atendidas",
+      "resolved": "Resueltas",
+      "median": "Mediana",
+      "average": "Promedio",
+      "p90": "P90",
+      "sla": "SLA",
+      "none": "—"
+    },
+    "channels": {
+      "title": "Canales",
+      "description": "Volumen y tiempo de respuesta por canal.",
+      "empty": "No hay canales",
+      "emptyHint": "Conecta un canal para empezar a medirlo.",
+      "channel": "Canal",
+      "new": "Nuevas",
+      "open": "Abiertas",
+      "resolved": "Resueltas",
+      "incoming": "Entrantes",
+      "outgoing": "Salientes",
+      "median": "Mediana",
+      "p90": "P90",
+      "sla": "SLA",
+      "none": "—"
+    }
+  },
+  "Metricas": {
+    "page": {
+      "unnamedAgent": "Agente sin nombre",
+      "accessDeniedTitle": "Solo administradores",
+      "accessDeniedBody": "Las métricas están disponibles para propietarios y administradores de la cuenta.",
+      "loadFailed": "No pudimos cargar las métricas.",
+      "retry": "Reintentar",
+      "customRangeHint": "Elige una fecha inicial y final y pulsa Aplicar para cargar el rango personalizado."
+    },
+    "filters": {
+      "title": "Métricas",
+      "description": "Rendimiento del equipo, tiempos de respuesta, SLA y actividad por canal.",
+      "updatedAt": "Actualizado {time}",
+      "refresh": "Actualizar",
+      "refreshing": "Actualizando…",
+      "allAgents": "Todos los agentes",
+      "allChannels": "Todos los canales",
+      "agentLabel": "Filtrar por agente",
+      "channelLabel": "Filtrar por canal",
+      "attentionLabel": "Tipo de atención",
+      "from": "Desde",
+      "to": "Hasta",
+      "apply": "Aplicar",
+      "preset": {
+        "today": "Hoy",
+        "yesterday": "Ayer",
+        "last7": "Últimos 7 días",
+        "last30": "Últimos 30 días",
+        "last90": "Últimos 90 días",
+        "this_month": "Este mes",
+        "last_month": "Mes anterior",
+        "custom": "Personalizado"
+      },
+      "attention": {
+        "all": "Toda la atención",
+        "human": "Humana",
+        "ai": "IA",
+        "automation": "Automática"
+      }
+    },
+    "sla": {
+      "title": "SLA y conversaciones pendientes",
+      "description": "Objetivos configurables y estado actual de la cola de espera.",
+      "firstResponse": "Primera respuesta",
+      "betweenMessages": "Entre respuestas",
+      "pendingAlert": "Alerta de espera",
+      "critical": "Crítico",
+      "minutes": "{count} min",
+      "none": "—",
+      "compliance": "Cumplimiento del SLA",
+      "complianceDetail": "{within} de {total} dentro del objetivo",
+      "pendingNow": "Pendientes ahora",
+      "pendingDetail": "{warning} en alerta · {critical} críticas",
+      "oldest": "La más antigua lleva {minutes} min",
+      "configure": "Configurar",
+      "dialogTitle": "Objetivos del SLA",
+      "dialogDescription": "Los tiempos se miden en minutos de calendario sobre mensajes reales.",
+      "timezone": "Zona horaria",
+      "cancel": "Cancelar",
+      "save": "Guardar",
+      "saving": "Guardando…",
+      "saveFailed": "No se pudo guardar la configuración."
+    },
+    "ai": {
+      "title": "IA y automatizaciones",
+      "description": "Participación de la IA, tiempos de respuesta y traspasos a humanos.",
+      "messages": "Mensajes de IA",
+      "conversationsDetail": "{count} conversaciones",
+      "responseTime": "Respuesta de IA",
+      "none": "—",
+      "turnsDetail": "{count} respuestas",
+      "automationMessages": "Mensajes automáticos",
+      "handoffs": "Traspasos a humano",
+      "handoffsDetail": "Conversaciones donde la IA pidió o cedió el control.",
+      "participation": "Participación de la IA",
+      "humanVsAi": "{human} respuestas humanas · {ai} respuestas de IA"
+    },
+    "activity": {
+      "title": "Actividad por día y hora",
+      "description": "Mensajes entrantes y salientes agrupados por día de la semana y hora local.",
+      "empty": "Sin actividad en este periodo",
+      "emptyHint": "La actividad aparecerá aquí cuando haya mensajes.",
+      "cell": "{weekday} {hour}:00 · {count} mensajes",
+      "peakHour": "Hora con más actividad: {hour}",
+      "peakWeekday": "Día con más actividad: {weekday}",
+      "none": "—",
+      "total": "{count} mensajes en total"
+    },
+    "conversations": {
+      "title": "Conversaciones del periodo",
+      "description": "Detalle por conversación, con tiempos, SLA y tipo de atención.",
+      "searchPlaceholder": "Buscar por contacto o teléfono",
+      "loadFailed": "No pudimos cargar las conversaciones.",
+      "retry": "Reintentar",
+      "empty": "No hay conversaciones que coincidan con los filtros.",
+      "none": "—",
+      "unnamedContact": "Contacto sin nombre",
+      "unassigned": "Sin asignar",
+      "pendingValue": "{minutes} min",
+      "pagination": "{from}–{to} de {total}",
+      "previous": "Anterior",
+      "next": "Siguiente",
+      "status": {
+        "all": "Todos los estados",
+        "open": "Abiertas",
+        "pending": "Pendientes",
+        "closed": "Cerradas"
+      },
+      "slaFilter": {
+        "all": "Todo el SLA",
+        "met": "Cumplido",
+        "breached": "Incumplido",
+        "unanswered": "Sin responder",
+        "pending": "En alerta",
+        "critical": "Crítico"
+      },
+      "slaState": {
+        "met": "Cumplido",
+        "breached": "Incumplido",
+        "unanswered": "Sin responder",
+        "pending": "En alerta",
+        "critical": "Crítico",
+        "no_inbound": "Sin entrada"
+      },
+      "sort": {
+        "last_activity": "Última actividad",
+        "created": "Creación",
+        "first_response": "Primera respuesta",
+        "pending": "Espera",
+        "contact": "Contacto"
+      },
+      "direction": {
+        "asc": "Ascendente",
+        "desc": "Descendente"
+      },
+      "columns": {
+        "contact": "Contacto",
+        "channel": "Canal",
+        "agent": "Agente",
+        "status": "Estado",
+        "attention": "Atención",
+        "created": "Creada",
+        "firstResponse": "1ª respuesta",
+        "pending": "Espera",
+        "sla": "SLA",
+        "history": "Historial"
+      },
+      "attention": {
+        "human": "Humana",
+        "ai": "IA",
+        "automation": "Automática",
+        "inbound": "Solo entrada"
+      },
+      "history": {
+        "button": "Ver historial",
+        "title": "Historial de la conversación",
+        "description": "Eventos registrados desde la creación de la conversación.",
+        "empty": "Todavía no hay eventos registrados.",
+        "loadFailed": "No se pudo cargar el historial.",
+        "close": "Cerrar",
+        "actor": {
+          "customer": "Cliente",
+          "agent": "Agente",
+          "ai": "IA",
+          "automation": "Automatización",
+          "system": "Sistema"
+        },
+        "events": {
+          "conversation_created": "Conversación creada",
+          "conversation_closed": "Conversación cerrada",
+          "conversation_resolved": "Conversación resuelta",
+          "conversation_reopened": "Conversación reabierta",
+          "agent_assigned": "Agente asignado",
+          "agent_unassigned": "Agente desasignado",
+          "transferred_to_human": "Transferida a humano",
+          "transferred_to_ai": "Transferida a IA",
+          "conversation_transferred": "Estado actualizado",
+          "message_received": "Mensaje recibido",
+          "message_sent": "Mensaje enviado",
+          "message_failed": "Mensaje fallido"
+        }
+      }
+    }
   }
 }

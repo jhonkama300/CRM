@@ -10,6 +10,7 @@ import { openOrganizationModal } from '@/lib/organization-modal';
 import { useAuth } from '@/hooks/use-auth';
 import { useTotalUnread } from '@/hooks/use-total-unread';
 import {
+  BarChart3,
   Bot,
   Building2,
   Crown,
@@ -28,7 +29,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import type { AccountRole } from '@/lib/auth/roles';
+import { hasMinRole, type AccountRole } from '@/lib/auth/roles';
 
 // Per-role chip metadata used in the sidebar's account strip + the
 // Members tab roster. Keeping this near both consumers in a single
@@ -82,6 +83,8 @@ interface NavItem {
    * Purely informational — doesn't affect routing or access.
    */
   beta?: boolean;
+  /** Minimum account role required to see this item. */
+  minRole?: AccountRole;
 }
 
 const navGroups: { labelKey: string; items: NavItem[] }[] = [
@@ -89,6 +92,12 @@ const navGroups: { labelKey: string; items: NavItem[] }[] = [
     labelKey: 'groupMain',
     items: [
       { href: '/dashboard', labelKey: 'dashboard', icon: LayoutDashboard },
+      {
+        href: '/metricas',
+        labelKey: 'metrics',
+        icon: BarChart3,
+        minRole: 'admin',
+      },
       { href: '/inbox', labelKey: 'inbox', icon: MessageSquare },
       { href: '/company', labelKey: 'company', icon: Building2 },
     ],
@@ -137,6 +146,11 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
     pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
 
   const renderNavItem = (item: NavItem) => {
+    if (
+      item.minRole &&
+      (!accountRole || !hasMinRole(accountRole, item.minRole))
+    )
+      return null;
     const isActive = isItemActive(item.href);
     const showInboxBadge =
       item.href === '/inbox' && totalUnread > 0 && !isActive;

@@ -142,7 +142,8 @@
     "menuSettings": "Settings",
     "menuSignOut": "Sign out",
     "company": "Company",
-    "structure": "Company structure"
+    "structure": "Company structure",
+    "metrics": "Metrics"
   },
   "CommandPalette": {
     "title": "Search",
@@ -199,7 +200,8 @@
     "menuSettings": "Settings",
     "menuSignOut": "Sign out",
     "company": "Company",
-    "structure": "Company structure"
+    "structure": "Company structure",
+    "metrics": "Metrics"
   },
   "ModeToggle": {
     "switchMode": "Switch to {mode} mode"
@@ -3939,6 +3941,15 @@
       "invalidPhoneNumberId": "Invalid Phone Number ID",
       "invalidWabaId": "Invalid WABA ID",
       "phoneNotInWaba": "Phone Number ID is not listed in that WABA"
+    },
+    "metrics": {
+      "loadFailed": "Could not load the metrics.",
+      "conversationsFailed": "Could not load the conversations.",
+      "exportFailed": "Could not export the metrics.",
+      "slaLoadFailed": "Could not load the SLA settings.",
+      "slaUpdateFailed": "Could not save the SLA settings.",
+      "eventsFailed": "Could not load the conversation history.",
+      "invalidParams": "Invalid metrics parameters."
     }
   },
   "Company": {
@@ -3979,5 +3990,305 @@
       "unnamed": "Unnamed"
     },
     "structureButton": "Company structure"
+  },
+  "Metrics": {
+    "title": "Metrics",
+    "description": "Response times, SLA compliance, and workload for your team.",
+    "updatedAt": "Updated {time}",
+    "loadFailed": "We couldn't load the metrics.",
+    "retry": "Retry",
+    "accessDeniedTitle": "Admins only",
+    "accessDeniedBody": "Metrics are available to account owners and admins.",
+    "rangeLabel": "Date range",
+    "channelLabel": "Filter metrics by channel",
+    "allChannels": "All channels",
+    "range": {
+      "1": "Today",
+      "7": "7 days",
+      "30": "30 days",
+      "90": "90 days"
+    },
+    "summary": {
+      "medianFirst": "Median first reply",
+      "medianFirstInfo": "Typical time a customer waits for the first human reply in this period.",
+      "averageFirst": "Average first reply",
+      "averageFirstInfo": "Mean time from a customer's first message to a human reply.",
+      "p90First": "P90 first reply",
+      "p90FirstInfo": "90% of customer messages got a human reply faster than this.",
+      "sla": "SLA compliance",
+      "slaInfo": "Share of human replies sent within the account's reply target.",
+      "slaDetail": "{within} of {total} within target",
+      "samples": "{count, plural, =1 {1 reply} other {# replies}}",
+      "target": "Target {minutes} min",
+      "resolvedCount": "{count, plural, =1 {1 resolved} other {# resolved}}",
+      "medianResolution": "Median resolution",
+      "medianResolutionInfo": "Typical time from a conversation starting to being closed.",
+      "newConversations": "New conversations",
+      "openConversations": "Open conversations",
+      "openConversationsInfo": "Conversations still open at the end of the period.",
+      "unanswered": "Unanswered",
+      "unansweredInfo": "Open conversations whose last customer message has no reply yet.",
+      "aiReply": "AI first reply",
+      "aiDetail": "{count, plural, =0 {No AI replies} =1 {1 AI reply} other {# AI replies}}",
+      "none": "—",
+      "vsPrevious": {
+        "1": "vs previous day",
+        "7": "vs previous 7 days",
+        "30": "vs previous 30 days",
+        "90": "vs previous 90 days"
+      },
+      "vsPreviousPeriod": "vs previous period",
+      "newContacts": "New contacts",
+      "assigned": "Assigned",
+      "assignedInfo": "New conversations with an assigned agent.",
+      "handled": "Handled",
+      "handledInfo": "Conversations with at least one human reply in the period.",
+      "pendingCritical": "Critical pending",
+      "pendingCriticalInfo": "Open conversations past the critical waiting threshold."
+    },
+    "response": {
+      "title": "Response time",
+      "description": "First human reply per conversation, grouped by when the customer asked.",
+      "median": "Median",
+      "p90": "P90",
+      "samplesLabel": "Replies",
+      "empty": "No reply data yet",
+      "emptyHint": "Human replies will appear here once customers write in.",
+      "none": "—"
+    },
+    "volume": {
+      "title": "Message volume",
+      "description": "Incoming customer messages and outgoing replies over time.",
+      "descriptionHour": "Incoming and outgoing messages by hour of day.",
+      "byTime": "Over time",
+      "byHour": "By hour",
+      "incoming": "Incoming",
+      "outgoing": "Outgoing",
+      "deliveryRate": "Delivered",
+      "readRate": "Read",
+      "failed": "Failed",
+      "empty": "No messages yet",
+      "emptyHint": "Messages received in this period will show up here.",
+      "none": "—"
+    },
+    "agents": {
+      "title": "Team performance",
+      "description": "Human replies and open workload per teammate.",
+      "empty": "No activity in this period",
+      "emptyHint": "Agents will appear here once they reply to customers.",
+      "agent": "Agent",
+      "unnamed": "Unnamed agent",
+      "open": "Open",
+      "replies": "Replies",
+      "conversations": "Conversations",
+      "assigned": "Assigned",
+      "handled": "Handled",
+      "resolved": "Resolved",
+      "median": "Median",
+      "average": "Average",
+      "p90": "P90",
+      "sla": "SLA",
+      "none": "—"
+    },
+    "channels": {
+      "title": "Channels",
+      "description": "Volume and response time per channel.",
+      "empty": "No channels",
+      "emptyHint": "Connect a channel to start measuring it.",
+      "channel": "Channel",
+      "new": "New",
+      "open": "Open",
+      "resolved": "Resolved",
+      "incoming": "In",
+      "outgoing": "Out",
+      "median": "Median",
+      "p90": "P90",
+      "sla": "SLA",
+      "none": "—"
+    }
+  },
+  "Metricas": {
+    "page": {
+      "unnamedAgent": "Unnamed agent",
+      "accessDeniedTitle": "Admins only",
+      "accessDeniedBody": "Metrics are available to account owners and admins.",
+      "loadFailed": "We couldn't load the metrics.",
+      "retry": "Retry",
+      "customRangeHint": "Pick a start and end date, then press Apply to load the custom range."
+    },
+    "filters": {
+      "title": "Metrics",
+      "description": "Team performance, response times, SLA, and channel activity.",
+      "updatedAt": "Updated {time}",
+      "refresh": "Refresh",
+      "refreshing": "Refreshing…",
+      "allAgents": "All agents",
+      "allChannels": "All channels",
+      "agentLabel": "Filter by agent",
+      "channelLabel": "Filter by channel",
+      "attentionLabel": "Attention type",
+      "from": "From",
+      "to": "To",
+      "apply": "Apply",
+      "preset": {
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "last7": "Last 7 days",
+        "last30": "Last 30 days",
+        "last90": "Last 90 days",
+        "this_month": "This month",
+        "last_month": "Last month",
+        "custom": "Custom"
+      },
+      "attention": {
+        "all": "All attention",
+        "human": "Human",
+        "ai": "AI",
+        "automation": "Automation"
+      }
+    },
+    "sla": {
+      "title": "SLA and pending conversations",
+      "description": "Configurable targets and the current state of the waiting queue.",
+      "firstResponse": "First response",
+      "betweenMessages": "Between responses",
+      "pendingAlert": "Pending alert",
+      "critical": "Critical",
+      "minutes": "{count} min",
+      "none": "—",
+      "compliance": "SLA compliance",
+      "complianceDetail": "{within} of {total} within target",
+      "pendingNow": "Pending now",
+      "pendingDetail": "{warning} warning · {critical} critical",
+      "oldest": "Oldest has been waiting {minutes} min",
+      "configure": "Configure",
+      "dialogTitle": "SLA targets",
+      "dialogDescription": "Times are measured in calendar minutes over real messages.",
+      "timezone": "Time zone",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving…",
+      "saveFailed": "Could not save the settings."
+    },
+    "ai": {
+      "title": "AI and automations",
+      "description": "AI participation, response time, and handoffs to humans.",
+      "messages": "AI messages",
+      "conversationsDetail": "{count} conversations",
+      "responseTime": "AI response",
+      "none": "—",
+      "turnsDetail": "{count} replies",
+      "automationMessages": "Automation messages",
+      "handoffs": "Human handoffs",
+      "handoffsDetail": "Conversations where AI asked for or yielded control.",
+      "participation": "AI participation",
+      "humanVsAi": "{human} human replies · {ai} AI replies"
+    },
+    "activity": {
+      "title": "Activity by day and hour",
+      "description": "Incoming and outgoing messages grouped by weekday and local hour.",
+      "empty": "No activity in this period",
+      "emptyHint": "Activity will appear here once there are messages.",
+      "cell": "{weekday} {hour}:00 · {count} messages",
+      "peakHour": "Busiest hour: {hour}",
+      "peakWeekday": "Busiest day: {weekday}",
+      "none": "—",
+      "total": "{count} messages total"
+    },
+    "conversations": {
+      "title": "Conversations in the period",
+      "description": "Per-conversation detail with times, SLA, and attention type.",
+      "searchPlaceholder": "Search by contact or phone",
+      "loadFailed": "We couldn't load the conversations.",
+      "retry": "Retry",
+      "empty": "No conversations match the filters.",
+      "none": "—",
+      "unnamedContact": "Unnamed contact",
+      "unassigned": "Unassigned",
+      "pendingValue": "{minutes} min",
+      "pagination": "{from}–{to} of {total}",
+      "previous": "Previous",
+      "next": "Next",
+      "status": {
+        "all": "All statuses",
+        "open": "Open",
+        "pending": "Pending",
+        "closed": "Closed"
+      },
+      "slaFilter": {
+        "all": "All SLA",
+        "met": "Met",
+        "breached": "Breached",
+        "unanswered": "Unanswered",
+        "pending": "Warning",
+        "critical": "Critical"
+      },
+      "slaState": {
+        "met": "Met",
+        "breached": "Breached",
+        "unanswered": "Unanswered",
+        "pending": "Warning",
+        "critical": "Critical",
+        "no_inbound": "No inbound"
+      },
+      "sort": {
+        "last_activity": "Last activity",
+        "created": "Created",
+        "first_response": "First response",
+        "pending": "Waiting",
+        "contact": "Contact"
+      },
+      "direction": {
+        "asc": "Ascending",
+        "desc": "Descending"
+      },
+      "columns": {
+        "contact": "Contact",
+        "channel": "Channel",
+        "agent": "Agent",
+        "status": "Status",
+        "attention": "Attention",
+        "created": "Created",
+        "firstResponse": "1st reply",
+        "pending": "Waiting",
+        "sla": "SLA",
+        "history": "History"
+      },
+      "attention": {
+        "human": "Human",
+        "ai": "AI",
+        "automation": "Automation",
+        "inbound": "Inbound only"
+      },
+      "history": {
+        "button": "View history",
+        "title": "Conversation history",
+        "description": "Events recorded since the conversation was created.",
+        "empty": "No events recorded yet.",
+        "loadFailed": "Could not load the history.",
+        "close": "Close",
+        "actor": {
+          "customer": "Customer",
+          "agent": "Agent",
+          "ai": "AI",
+          "automation": "Automation",
+          "system": "System"
+        },
+        "events": {
+          "conversation_created": "Conversation created",
+          "conversation_closed": "Conversation closed",
+          "conversation_resolved": "Conversation resolved",
+          "conversation_reopened": "Conversation reopened",
+          "agent_assigned": "Agent assigned",
+          "agent_unassigned": "Agent unassigned",
+          "transferred_to_human": "Transferred to human",
+          "transferred_to_ai": "Transferred to AI",
+          "conversation_transferred": "Status updated",
+          "message_received": "Message received",
+          "message_sent": "Message sent",
+          "message_failed": "Message failed"
+        }
+      }
+    }
   }
 }

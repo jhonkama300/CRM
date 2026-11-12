@@ -72,7 +72,7 @@ export async function proxy(request: NextRequest) {
   // Protected pages - redirect to login if not authenticated
   // Every top-level route under src/app/(dashboard)/ belongs here —
   // proxy.test.ts reads that directory and fails on a missing one.
-  const protectedPaths = ['/dashboard', '/company', '/inbox', '/contacts', '/pipelines', '/broadcasts', '/automations', '/flows', '/agents', '/notifications', '/settings']
+  const protectedPaths = ['/dashboard', '/company', '/inbox', '/contacts', '/pipelines', '/broadcasts', '/automations', '/flows', '/agents', '/metricas', '/metrics', '/notifications', '/settings']
   if (!user && protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'

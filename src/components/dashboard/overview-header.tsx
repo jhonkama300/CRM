@@ -103,6 +103,10 @@ export function OverviewHeader({
         <WhatsAppHealthChip />
         <Select
           value={channelId ?? '__all__'}
+          items={[
+            { value: '__all__', label: t('allChannels') },
+            ...channels.map((channel) => ({ value: channel.id, label: channel.name })),
+          ]}
           onValueChange={(value) =>
             onChannelChange(!value || value === '__all__' ? null : value)
           }
